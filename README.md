@@ -7,7 +7,7 @@ The app never contains OpenAI or Meta credentials. The iOS app only receives the
 ## Local backend setup
 
 ```bash
-cd /Users/christine/Documents/ChatGPT/voice-text-project/v3/backend
+cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements-dev.txt
@@ -43,8 +43,8 @@ The backend uses `backend/data/inbox.sqlite3` by default. Audio files are tempor
 ## Run the Flutter app
 
 ```bash
-cd /Users/christine/Documents/ChatGPT/voice-text-project/v3/frontend
-export PATH="/Users/christine/Documents/flutter/bin:$PATH"
+cd frontend
+export PATH="/path/to/flutter/bin:$PATH"
 flutter pub get
 flutter run -d chrome --web-port 5174
 ```
@@ -56,7 +56,7 @@ On a physical iPhone during a debug run, use the Mac's private LAN address inste
 The iOS project includes microphone and local-network permission strings. To run on a simulator or iPhone, install the full Xcode app, select it with `xcode-select`, then run:
 
 ```bash
-export PATH="/Users/christine/Documents/flutter/bin:$PATH"
+export PATH="/path/to/flutter/bin:$PATH"
 flutter doctor
 flutter run -d ios
 ```
@@ -87,11 +87,11 @@ The handler accepts audio messages only after checking the WABA ID and `metadata
 ## Verification
 
 ```bash
-cd /Users/christine/Documents/ChatGPT/voice-text-project/v3/backend
-../.venv/bin/python -m pytest -q
+cd backend
+.venv/bin/python -m pytest -q
 
 cd ../frontend
-export PATH="/Users/christine/Documents/flutter/bin:$PATH"
+export PATH="/path/to/flutter/bin:$PATH"
 flutter analyze
 flutter test
 flutter build web --release
