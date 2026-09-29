@@ -1,0 +1,39 @@
+{"protocolVersion":"0.1.1","runnerVersion":null,"pid":78729,"type":"start","time":0}
+{"suite":{"id":0,"platform":"vm","path":"/Users/christine/Documents/ChatGPT/voice-text-project/v4/frontend/test/connection_test.dart"},"type":"suite","time":0}
+{"test":{"id":1,"name":"loading /Users/christine/Documents/ChatGPT/voice-text-project/v4/frontend/test/connection_test.dart","suiteID":0,"groupIDs":[],"metadata":{"skip":false,"skipReason":null},"line":null,"column":null,"url":null},"type":"testStart","time":0}
+{"suite":{"id":2,"platform":"vm","path":"/Users/christine/Documents/ChatGPT/voice-text-project/v4/frontend/test/widget_test.dart"},"type":"suite","time":2}
+{"test":{"id":3,"name":"loading /Users/christine/Documents/ChatGPT/voice-text-project/v4/frontend/test/widget_test.dart","suiteID":2,"groupIDs":[],"metadata":{"skip":false,"skipReason":null},"line":null,"column":null,"url":null},"type":"testStart","time":2}
+{"suite":{"id":4,"platform":"vm","path":"/Users/christine/Documents/ChatGPT/voice-text-project/v4/frontend/test/call_inbox_test.dart"},"type":"suite","time":3}
+{"test":{"id":5,"name":"loading /Users/christine/Documents/ChatGPT/voice-text-project/v4/frontend/test/call_inbox_test.dart","suiteID":4,"groupIDs":[],"metadata":{"skip":false,"skipReason":null},"line":null,"column":null,"url":null},"type":"testStart","time":3}
+{"count":3,"time":3,"type":"allSuites"}
+
+[{"event":"test.startedProcess","params":{"vmServiceUri":null}}]
+
+[{"event":"test.startedProcess","params":{"vmServiceUri":null}}]
+
+[{"event":"test.startedProcess","params":{"vmServiceUri":null}}]
+{"testID":5,"result":"success","skipped":false,"hidden":true,"type":"testDone","time":1598}
+{"group":{"id":6,"suiteID":4,"parentID":null,"name":"","metadata":{"skip":false,"skipReason":null},"testCount":3,"line":null,"column":null,"url":null},"type":"group","time":1601}
+{"test":{"id":7,"name":"v4 rejects the v3 backend to keep the versions separate","suiteID":4,"groupIDs":[6],"metadata":{"skip":false,"skipReason":null},"line":174,"column":5,"url":"package:flutter_test/src/widget_tester.dart","root_line":44,"root_column":3,"root_url":"file:///Users/christine/Documents/ChatGPT/voice-text-project/v4/frontend/test/call_inbox_test.dart"},"type":"testStart","time":1601}
+{"testID":3,"result":"success","skipped":false,"hidden":true,"type":"testDone","time":1727}
+{"group":{"id":8,"suiteID":2,"parentID":null,"name":"","metadata":{"skip":false,"skipReason":null},"testCount":1,"line":null,"column":null,"url":null},"type":"group","time":1728}
+{"test":{"id":9,"name":"French default and English switch work on a narrow screen","suiteID":2,"groupIDs":[8],"metadata":{"skip":false,"skipReason":null},"line":174,"column":5,"url":"package:flutter_test/src/widget_tester.dart","root_line":6,"root_column":3,"root_url":"file:///Users/christine/Documents/ChatGPT/voice-text-project/v4/frontend/test/widget_test.dart"},"type":"testStart","time":1728}
+{"testID":1,"result":"success","skipped":false,"hidden":true,"type":"testDone","time":1766}
+{"group":{"id":10,"suiteID":0,"parentID":null,"name":"","metadata":{"skip":false,"skipReason":null},"testCount":5,"line":null,"column":null,"url":null},"type":"group","time":1856}
+{"test":{"id":11,"name":"Only HTTPS or local debug addresses accepted","suiteID":0,"groupIDs":[10],"metadata":{"skip":false,"skipReason":null},"line":17,"column":3,"url":"file:///Users/christine/Documents/ChatGPT/voice-text-project/v4/frontend/test/connection_test.dart"},"type":"testStart","time":1857}
+{"testID":11,"result":"success","skipped":false,"hidden":false,"type":"testDone","time":1879}
+{"test":{"id":12,"name":"Connect authenticates without embedding token in URL; disconnect clears state","suiteID":0,"groupIDs":[10],"metadata":{"skip":false,"skipReason":null},"line":174,"column":5,"url":"package:flutter_test/src/widget_tester.dart","root_line":35,"root_column":3,"root_url":"file:///Users/christine/Documents/ChatGPT/voice-text-project/v4/frontend/test/connection_test.dart"},"type":"testStart","time":1881}
+{"testID":7,"result":"success","skipped":false,"hidden":false,"type":"testDone","time":1899}
+{"test":{"id":13,"name":"call transcript, translation and speaker timeline fit an iPhone","suiteID":4,"groupIDs":[6],"metadata":{"skip":false,"skipReason":null},"line":174,"column":5,"url":"package:flutter_test/src/widget_tester.dart","root_line":63,"root_column":3,"root_url":"file:///Users/christine/Documents/ChatGPT/voice-text-project/v4/frontend/test/call_inbox_test.dart"},"type":"testStart","time":1899}
+{"testID":12,"result":"success","skipped":false,"hidden":false,"type":"testDone","time":2065}
+{"test":{"id":14,"name":"Wrong token leaves app disconnected and shows a useful error","suiteID":0,"groupIDs":[10],"metadata":{"skip":false,"skipReason":null},"line":174,"column":5,"url":"package:flutter_test/src/widget_tester.dart","root_line":67,"root_column":3,"root_url":"file:///Users/christine/Documents/ChatGPT/voice-text-project/v4/frontend/test/connection_test.dart"},"type":"testStart","time":2066}
+{"testID":13,"result":"success","skipped":false,"hidden":false,"type":"testDone","time":2549}
+{"test":{"id":15,"name":"call progress polls and partial translation retry uses the call ID","suiteID":4,"groupIDs":[6],"metadata":{"skip":false,"skipReason":null},"line":174,"column":5,"url":"package:flutter_test/src/widget_tester.dart","root_line":116,"root_column":3,"root_url":"file:///Users/christine/Documents/ChatGPT/voice-text-project/v4/frontend/test/call_inbox_test.dart"},"type":"testStart","time":2549}
+{"testID":15,"result":"success","skipped":false,"hidden":false,"type":"testDone","time":2649}
+{"testID":9,"result":"success","skipped":false,"hidden":false,"type":"testDone","time":2673}
+{"testID":14,"result":"success","skipped":false,"hidden":false,"type":"testDone","time":2675}
+{"test":{"id":16,"name":"Rejects v2 before enabling app actions","suiteID":0,"groupIDs":[10],"metadata":{"skip":false,"skipReason":null},"line":174,"column":5,"url":"package:flutter_test/src/widget_tester.dart","root_line":95,"root_column":3,"root_url":"file:///Users/christine/Documents/ChatGPT/voice-text-project/v4/frontend/test/connection_test.dart"},"type":"testStart","time":2675}
+{"testID":16,"result":"success","skipped":false,"hidden":false,"type":"testDone","time":2680}
+{"test":{"id":17,"name":"Inbox displays transcript and translation and deletes after confirmation","suiteID":0,"groupIDs":[10],"metadata":{"skip":false,"skipReason":null},"line":174,"column":5,"url":"package:flutter_test/src/widget_tester.dart","root_line":111,"root_column":3,"root_url":"file:///Users/christine/Documents/ChatGPT/voice-text-project/v4/frontend/test/connection_test.dart"},"type":"testStart","time":2680}
+{"testID":17,"result":"success","skipped":false,"hidden":false,"type":"testDone","time":2827}
+{"success":true,"type":"done","time":2836}

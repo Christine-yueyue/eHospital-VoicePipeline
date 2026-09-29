@@ -1,0 +1,19 @@
+name: voice_notes
+description: Voice Notes v4 for iOS, with Meta call transcripts, translation and a WhatsApp inbox.
+publish_to: none
+version: 4.0.0+1
+environment:
+  sdk: '>=3.10.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  file_picker: ^13.1.0
+  http: ^1.6.0
+  record: ^7.1.1
+  web_socket_channel: ^3.0.3
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+flutter:
+  uses-material-design: true

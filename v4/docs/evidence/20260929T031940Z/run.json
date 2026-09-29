@@ -1,0 +1,96 @@
+[
+  {
+    "name": "toolchain",
+    "command": [
+      "/Users/christine/Documents/flutter/bin/flutter",
+      "--version"
+    ],
+    "cwd": "frontend",
+    "started_utc": "2026-09-29T03:19:41.205846+00:00",
+    "duration_seconds": 0.62,
+    "exit_code": 0,
+    "log": "toolchain.log"
+  },
+  {
+    "name": "xcode",
+    "command": [
+      "xcodebuild",
+      "-version"
+    ],
+    "cwd": "frontend",
+    "started_utc": "2026-09-29T03:19:41.821803+00:00",
+    "duration_seconds": 0.35,
+    "exit_code": 0,
+    "log": "xcode.log"
+  },
+  {
+    "name": "ffmpeg",
+    "command": [
+      "ffmpeg",
+      "-version"
+    ],
+    "cwd": "backend",
+    "started_utc": "2026-09-29T03:19:42.168639+00:00",
+    "duration_seconds": 0.19,
+    "exit_code": 0,
+    "log": "ffmpeg.log"
+  },
+  {
+    "name": "backend-tests",
+    "command": [
+      "/Users/christine/Documents/ChatGPT/voice-text-project/v4/backend/.venv/bin/python",
+      "-m",
+      "pytest",
+      "-q",
+      "--junitxml=/Users/christine/Documents/ChatGPT/voice-text-project/v4/docs/evidence/20260929T031940Z/backend-junit.xml"
+    ],
+    "cwd": "backend",
+    "started_utc": "2026-09-29T03:19:42.359693+00:00",
+    "duration_seconds": 1.75,
+    "exit_code": 0,
+    "log": "backend-tests.log"
+  },
+  {
+    "name": "flutter-analyze",
+    "command": [
+      "/Users/christine/Documents/flutter/bin/flutter",
+      "analyze",
+      "--no-pub"
+    ],
+    "cwd": "frontend",
+    "started_utc": "2026-09-29T03:19:44.115003+00:00",
+    "duration_seconds": 2.39,
+    "exit_code": 0,
+    "log": "flutter-analyze.log"
+  },
+  {
+    "name": "flutter-tests",
+    "command": [
+      "/Users/christine/Documents/flutter/bin/flutter",
+      "test",
+      "--no-pub",
+      "--machine"
+    ],
+    "cwd": "frontend",
+    "started_utc": "2026-09-29T03:19:46.502221+00:00",
+    "duration_seconds": 3.42,
+    "exit_code": 0,
+    "log": "flutter-tests.log"
+  },
+  {
+    "name": "ios-build",
+    "command": [
+      "/Users/christine/Documents/flutter/bin/flutter",
+      "build",
+      "ios",
+      "--simulator",
+      "--debug",
+      "--no-pub"
+    ],
+    "cwd": "frontend",
+    "started_utc": "2026-09-29T03:19:49.923936+00:00",
+    "duration_seconds": 22.8,
+    "exit_code": 0,
+    "log": "ios-build.log"
+  }
+]

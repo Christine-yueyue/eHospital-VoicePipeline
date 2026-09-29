@@ -1,0 +1,101 @@
+[
+  {
+    "name": "v4 rejects the v3 backend to keep the versions separate",
+    "result": {
+      "testID": 7,
+      "result": "success",
+      "skipped": false,
+      "hidden": false,
+      "type": "testDone",
+      "time": 1899
+    }
+  },
+  {
+    "name": "French default and English switch work on a narrow screen",
+    "result": {
+      "testID": 9,
+      "result": "success",
+      "skipped": false,
+      "hidden": false,
+      "type": "testDone",
+      "time": 2673
+    }
+  },
+  {
+    "name": "Only HTTPS or local debug addresses accepted",
+    "result": {
+      "testID": 11,
+      "result": "success",
+      "skipped": false,
+      "hidden": false,
+      "type": "testDone",
+      "time": 1879
+    }
+  },
+  {
+    "name": "Connect authenticates without embedding token in URL; disconnect clears state",
+    "result": {
+      "testID": 12,
+      "result": "success",
+      "skipped": false,
+      "hidden": false,
+      "type": "testDone",
+      "time": 2065
+    }
+  },
+  {
+    "name": "call transcript, translation and speaker timeline fit an iPhone",
+    "result": {
+      "testID": 13,
+      "result": "success",
+      "skipped": false,
+      "hidden": false,
+      "type": "testDone",
+      "time": 2549
+    }
+  },
+  {
+    "name": "Wrong token leaves app disconnected and shows a useful error",
+    "result": {
+      "testID": 14,
+      "result": "success",
+      "skipped": false,
+      "hidden": false,
+      "type": "testDone",
+      "time": 2675
+    }
+  },
+  {
+    "name": "call progress polls and partial translation retry uses the call ID",
+    "result": {
+      "testID": 15,
+      "result": "success",
+      "skipped": false,
+      "hidden": false,
+      "type": "testDone",
+      "time": 2649
+    }
+  },
+  {
+    "name": "Rejects v2 before enabling app actions",
+    "result": {
+      "testID": 16,
+      "result": "success",
+      "skipped": false,
+      "hidden": false,
+      "type": "testDone",
+      "time": 2680
+    }
+  },
+  {
+    "name": "Inbox displays transcript and translation and deletes after confirmation",
+    "result": {
+      "testID": 17,
+      "result": "success",
+      "skipped": false,
+      "hidden": false,
+      "type": "testDone",
+      "time": 2827
+    }
+  }
+]

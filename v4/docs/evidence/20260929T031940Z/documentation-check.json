@@ -1,0 +1,10 @@
+{
+  "checked_utc": "2026-09-29T12:16:06.231074+00:00",
+  "purpose": "Post-writing documentation and evidence consistency check",
+  "broken_local_markdown_links": [],
+  "changed_tested_source_files": [],
+  "tested_source_files_checked": 32,
+  "backend_passed": 97,
+  "flutter_passed": 9,
+  "requirements_mapped": 21
+}
