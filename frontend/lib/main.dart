@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'voice_controller.dart';
 import 'connection_page.dart';
@@ -9,34 +10,58 @@ import 'inbox_page.dart';
 
 void main() => runApp(const VoiceNotesApp());
 
-class VoiceNotesApp extends StatelessWidget {
+class VoiceNotesApp extends StatefulWidget {
   const VoiceNotesApp({super.key});
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'Voice Notes v3',
-    debugShowCheckedModeBanner: false,
-    theme: ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF136D62)),
-      scaffoldBackgroundColor: const Color(0xFFF5F6F3),
-      inputDecorationTheme: const InputDecorationTheme(
-        border: OutlineInputBorder(),
+  State<VoiceNotesApp> createState() => _VoiceNotesAppState();
+}
+
+class _VoiceNotesAppState extends State<VoiceNotesApp> {
+  final controller = VoiceController();
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (context, _) => MaterialApp(
+      title: 'Voice Notes v3',
+      debugShowCheckedModeBanner: false,
+      locale: Locale(controller.localeCode),
+      supportedLocales: const [Locale('en'), Locale('fr'), Locale('ar')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF136D62)),
+        scaffoldBackgroundColor: const Color(0xFFF5F6F3),
+        inputDecorationTheme: const InputDecorationTheme(
+          border: OutlineInputBorder(),
+        ),
       ),
+      home: VoiceHome(controller: controller),
     ),
-    home: const VoiceHome(),
   );
 }
 
 class VoiceHome extends StatefulWidget {
-  const VoiceHome({super.key});
+  const VoiceHome({super.key, required this.controller});
+  final VoiceController controller;
 
   @override
   State<VoiceHome> createState() => _VoiceHomeState();
 }
 
 class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
-  final controller = VoiceController();
+  VoiceController get controller => widget.controller;
 
   @override
   void initState() {
@@ -65,7 +90,6 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    controller.dispose();
     super.dispose();
   }
 
@@ -75,11 +99,11 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
     builder: (context, _) {
       final c = controller;
       final status = switch (c.state) {
-        VoiceState.idle => 'Ready when you are',
-        VoiceState.uploading => 'Transcribing and translating your file…',
-        VoiceState.connecting => 'Connecting to live translation…',
-        VoiceState.listening => 'Listening · speak naturally',
-        VoiceState.finishing => 'Finishing the last words…',
+        VoiceState.idle => c.t('Ready when you are'),
+        VoiceState.uploading => c.t('Transcribing and translating your file…'),
+        VoiceState.connecting => c.t('Connecting to live translation…'),
+        VoiceState.listening => c.t('Listening · speak naturally'),
+        VoiceState.finishing => c.t('Finishing the last words…'),
       };
       return Scaffold(
         appBar: AppBar(
@@ -99,7 +123,7 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
           ),
           actions: [
             IconButton(
-              tooltip: 'Connection settings',
+              tooltip: c.t('Connection settings'),
               onPressed: c.busy
                   ? null
                   : () => Navigator.push(
@@ -110,11 +134,20 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                     ),
               icon: const Icon(Icons.settings_outlined),
             ),
-            const Padding(
-              padding: EdgeInsets.only(right: 24),
-              child: Text(
-                'EN / FR',
-                style: TextStyle(fontSize: 13, color: Color(0xFF58665F)),
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: 12),
+              child: DropdownButton<String>(
+                key: const Key('language-picker'),
+                value: c.localeCode,
+                underline: const SizedBox.shrink(),
+                onChanged: (value) {
+                  if (value != null) c.setLocale(value);
+                },
+                items: const [
+                  DropdownMenuItem(value: 'en', child: Text('English')),
+                  DropdownMenuItem(value: 'fr', child: Text('Français')),
+                  DropdownMenuItem(value: 'ar', child: Text('العربية')),
+                ],
               ),
             ),
           ],
@@ -134,8 +167,8 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                         children: [
                           Text(
                             c.connected
-                                ? 'Connected to your server'
-                                : 'Connect your server to get started',
+                                ? c.t('Connected to your server')
+                                : c.t('Connect your server to get started'),
                             style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 8),
@@ -156,8 +189,8 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                                 icon: const Icon(Icons.link),
                                 label: Text(
                                   c.connected
-                                      ? 'Connection settings'
-                                      : 'Connect server',
+                                      ? c.t('Connection settings')
+                                      : c.t('Connect server'),
                                 ),
                               ),
                               FilledButton.tonalIcon(
@@ -171,7 +204,7 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                                         ),
                                       ),
                                 icon: const Icon(Icons.inbox_outlined),
-                                label: const Text('WhatsApp inbox'),
+                                label: Text(c.t('WhatsApp inbox')),
                               ),
                             ],
                           ),
@@ -180,15 +213,30 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                     ),
                   ),
                   const SizedBox(height: 12),
+                  Card(
+                    child: SwitchListTile.adaptive(
+                      value: c.saveToDatabase,
+                      onChanged: !c.connected || c.busy
+                          ? null
+                          : c.setSaveToDatabase,
+                      title: Text(c.t('Save to Database')),
+                      subtitle: Text(
+                        c.t('Applies to WhatsApp, uploads, and live sessions.'),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   Text(
-                    'Your voice, in two languages.',
+                    c.t('Your voice, in two languages.'),
                     style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 12),
-                  const Text(
-                    'Upload a voice note or speak into your microphone. Read the original words alongside their translation.',
+                  Text(
+                    c.t(
+                      'Upload a voice note or speak into your microphone. Read the original words alongside their translation.',
+                    ),
                     style: TextStyle(fontSize: 17, height: 1.5),
                   ),
                   const SizedBox(height: 28),
@@ -202,21 +250,21 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                         child: DropdownButtonFormField<String>(
                           isExpanded: true,
                           initialValue: c.targetLanguage,
-                          decoration: const InputDecoration(
-                            labelText: 'Translate into',
+                          decoration: InputDecoration(
+                            labelText: c.t('Translate into'),
                           ),
-                          items: const [
+                          items: [
                             DropdownMenuItem(
                               value: 'fr',
                               child: Text(
-                                'French / Français',
+                                c.t('French / Français'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             DropdownMenuItem(
                               value: 'en',
-                              child: Text('English'),
+                              child: Text(c.t('English')),
                             ),
                           ],
                           onChanged: c.busy
@@ -226,8 +274,10 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                                 },
                         ),
                       ),
-                      const Text(
-                        'English and French input · language detected automatically',
+                      Text(
+                        c.t(
+                          'English and French input · language detected automatically',
+                        ),
                         style: TextStyle(color: Color(0xFF58665F)),
                       ),
                     ],
@@ -237,20 +287,38 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                     builder: (context, constraints) {
                       final upload = _panel(
                         icon: Icons.upload_file_rounded,
-                        title: 'Upload a voice note',
+                        title: c.t('Upload a voice note'),
                         children: [
                           Text(
-                            'WhatsApp .ogg / .opus, MP3, WAV, M4A or WebM. Up to ${c.maxUploadBytes ~/ 1000000} MB.',
+                            c
+                                .t(
+                                  'WhatsApp .ogg / .opus, MP3, WAV, M4A or WebM. Up to {size} MB.',
+                                )
+                                .replaceAll(
+                                  '{size}',
+                                  '${c.maxUploadBytes ~/ 1000000}',
+                                ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            c.t(
+                              'Uploading saves the original audio and transcription on the machine running this backend. It is not automatically synced to your iPhone.',
+                            ),
+                            style: TextStyle(
+                              color: Color(0xFF58665F),
+                              fontSize: 12,
+                              height: 1.4,
+                            ),
                           ),
                           const SizedBox(height: 20),
                           OutlinedButton.icon(
                             onPressed: c.busy ? null : c.pickFile,
                             icon: const Icon(Icons.folder_open),
-                            label: const Text('Choose audio file'),
+                            label: Text(c.t('Choose audio file')),
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            c.filename ?? 'No file selected',
+                            c.filename ?? c.t('No file selected'),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -260,16 +328,18 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                                 ? null
                                 : c.upload,
                             icon: const Icon(Icons.translate),
-                            label: const Text('Transcribe & translate'),
+                            label: Text(c.t('Upload & transcribe')),
                           ),
                         ],
                       );
                       final live = _panel(
                         icon: Icons.mic_none_rounded,
-                        title: 'Speak live',
+                        title: c.t('Speak live'),
                         children: [
-                          const Text(
-                            'Allow microphone access, then speak in English or French. Text appears as you talk.',
+                          Text(
+                            c.t(
+                              'Allow microphone access, then speak in English or French. Text appears as you talk.',
+                            ),
                           ),
                           const SizedBox(height: 20),
                           FilledButton.icon(
@@ -285,13 +355,15 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                             ),
                             label: Text(
                               c.state == VoiceState.listening
-                                  ? 'Stop & finish'
-                                  : 'Start speaking',
+                                  ? c.t('Stop & finish')
+                                  : c.t('Start speaking'),
                             ),
                           ),
                           const SizedBox(height: 16),
-                          const Text(
-                            'Live translated text · up to 10 minutes per session\nSmall delays are normal. Keep this page open.',
+                          Text(
+                            c.t(
+                              'Live translated text · up to 10 minutes per session\nSmall delays are normal. Keep this page open.',
+                            ),
                             style: TextStyle(
                               color: Color(0xFF58665F),
                               height: 1.5,
@@ -348,14 +420,16 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final original = _result(
-                        'Original transcript',
+                        c.t('Original transcript'),
                         c.transcript,
-                        'Your original words will appear here.',
+                        c.t('Your original words will appear here.'),
                       );
                       final translated = _result(
-                        '${c.targetName} translation',
+                        c
+                            .t('{language} translation')
+                            .replaceAll('{language}', c.t(c.targetName)),
                         c.translation,
-                        'Your translated text will appear here.',
+                        c.t('Your translated text will appear here.'),
                       );
                       if (constraints.maxWidth < 720) {
                         return Column(
@@ -377,13 +451,17 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                     },
                   ),
                   const SizedBox(height: 24),
-                  const Text(
-                    'Testing with WhatsApp? Save a voice note to your device, then choose it above. Live mode uses this microphone.',
+                  Text(
+                    c.t(
+                      'Testing with WhatsApp? Save a voice note to your device, then choose it above. Live mode uses this microphone.',
+                    ),
                     style: TextStyle(color: Color(0xFF58665F)),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Audio is processed by OpenAI. Upload and live results stay in this app session. WhatsApp results stay on your server for 24 hours; audio is deleted after processing.',
+                  Text(
+                    c.t(
+                      'Audio is processed by OpenAI. Uploaded audio and transcripts are stored on the backend machine in its local data folder. WhatsApp inbox results also remain in the app queue.',
+                    ),
                     style: TextStyle(color: Color(0xFF58665F), fontSize: 12),
                   ),
                 ],
@@ -452,14 +530,14 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                 ),
               ),
               IconButton(
-                tooltip: 'Copy text',
+                tooltip: controller.t('Copy text'),
                 onPressed: text.isEmpty
                     ? null
                     : () async {
                         await Clipboard.setData(ClipboardData(text: text));
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Copied')),
+                            SnackBar(content: Text(controller.t('Copied'))),
                           );
                         }
                       },

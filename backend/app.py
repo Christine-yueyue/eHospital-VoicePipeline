@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from pydantic import BaseModel
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -21,6 +22,7 @@ from services import LANGUAGES, check_target, transcribe_audio, translate_text
 from live import live_router
 from auth import app_token, authorized
 import whatsapp
+import voice_feedback
 
 ALLOWED_EXTENSIONS = {".ogg", ".opus", ".mp3", ".wav", ".m4a", ".webm"}
 try:
@@ -82,7 +84,17 @@ async def validation_error(_request: Request, _exc: RequestValidationError):
 async def config():
     return {"max_upload_bytes": MAX_UPLOAD_BYTES, "allowed_extensions": sorted(ALLOWED_EXTENSIONS),
             "languages": LANGUAGES, "live_sample_rate": 24000, "version": "3.0.0",
-            "whatsapp": whatsapp.settings()}
+            "whatsapp": whatsapp.settings(),
+            "save_to_database": voice_feedback.get_save_to_database()}
+
+
+class SaveSetting(BaseModel):
+    enabled: bool
+
+
+@app.post('/api/settings/save-to-database')
+async def update_save_setting(setting: SaveSetting):
+    return {'save_to_database': voice_feedback.set_save_to_database(setting.enabled)}
 
 
 @app.get('/health')
@@ -92,7 +104,7 @@ async def health():
 
 @app.post("/api/transcribe")
 async def transcribe(file: UploadFile | None = File(default=None), target_language: str = Form("")):
-    """Keep the original endpoint; translation is optional for older clients."""
+    """Transcribe an upload, persisting it only when the global setting is enabled."""
     try:
         if target_language:
             check_target(target_language)
@@ -115,9 +127,30 @@ async def transcribe(file: UploadFile | None = File(default=None), target_langua
                     output.write(chunk)
             if not size:
                 raise HTTPException(400, "The audio file is empty.")
-            transcript = await transcribe_audio(str(path))
+            mime_type = {
+                '.ogg': 'audio/ogg', '.opus': 'audio/opus', '.mp3': 'audio/mpeg',
+                '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.webm': 'audio/webm',
+            }[extension]
+            save_enabled = voice_feedback.get_save_to_database()
+            record = voice_feedback.store_audio(path, extension=extension, mime_type=mime_type) if save_enabled else None
+            try:
+                transcript = await transcribe_audio(
+                    str(voice_feedback.audio_directory() / record['file_name']) if record else str(path))
+            except HTTPException as exc:
+                if record:
+                    voice_feedback.mark_failed(record['audio_path'],
+                        'Transcription failed. Check the audio file or provider settings and retry.')
+                raise exc
+            except Exception:
+                if record:
+                    voice_feedback.mark_failed(record['audio_path'],
+                        'Transcription failed. Check backend settings and retry.')
+                raise HTTPException(500, "Transcription failed. Please retry.") from None
+            if record:
+                voice_feedback.mark_completed(record['audio_path'], transcript)
         result = {"success": True, "filename": filename, "transcript": transcript,
-                  "translation": "", "target_language": target_language}
+                  "translation": "", "target_language": target_language,
+                  "saved": save_enabled, "source": 'upload'}
         if target_language:
             try:
                 result["translation"] = await translate_text(transcript, target_language)

@@ -27,7 +27,7 @@ python ../scripts/init_env.py --reuse-v2-openai
 Start v3 on port 8003 so it does not collide with v2:
 
 ```bash
-uvicorn app:app --reload --host 127.0.0.1 --port 8003
+uvicorn app:app --reload --host 127.0.0.1 --port 8003 --no-access-log
 ```
 
 If you change `APP_ACCESS_TOKEN` and the app still reports an invalid token, stop the old backend process and start it again. For a local run, clear a token that may already be exported in the terminal first: `unset APP_ACCESS_TOKEN`. The backend then reloads the value from `v3/backend/.env`.
@@ -38,7 +38,15 @@ Live microphone mode uses two server-side Realtime sessions: the translation ses
 
 When the target is English and the speaker is already speaking English, the app mirrors the original transcript into the English translation panel because the translation endpoint can correctly omit a no-op translation event.
 
-The backend uses `backend/data/inbox.sqlite3` by default. Audio files are temporary and deleted after processing. Transcript results are retained for 24 hours, then their content is removed; message IDs remain briefly as deduplication tombstones.
+The backend keeps its WhatsApp worker queue in `backend/data/inbox.sqlite3`. Persisted voice feedback uses `backend/data/voice_feedback.db` and stores original audio under `backend/data/audio/`. These paths are resolved relative to the backend project, and `backend/data/` is excluded from Git. Data stays on the machine running FastAPI; it is not automatically synced to the iPhone. The `voice_feedback` table does not use or modify the legacy `patient_feedback` table or collection.
+
+The page has one **Save to Database** switch shared by WhatsApp, Upload, and Speak Live. When enabled, uploads and WhatsApp messages save their original audio plus transcript; completed live sessions save their transcript and translation. Each row records its `source`. When disabled, transcription and the temporary WhatsApp inbox still work, but new items are not written to `voice_feedback`. The setting is stored in the same local database. Upload uses **Upload & transcribe** and a generated server-side filename. A transcription failure retains saved audio and marks its row `failed`.
+
+The Meta webhook continues to verify the GET challenge and validate `X-Hub-Signature-256` before accepting a POST. Configure Meta's callback URL as `https://<backend-host>/webhooks/whatsapp`, subscribe the WhatsApp Business Account to `messages`, and put the same verify token and app secret in the backend configuration. With saving enabled, the worker acknowledges after queueing, downloads media from trusted Meta hosts, copies original bytes to `backend/data/audio/`, creates a pending `voice_feedback` row, and transcribes it. `source_message_id` is unique when present, so webhook retries reuse the same record. Queue/result retention does not automatically delete rows or audio from `voice_feedback`.
+
+The frontend language menu switches the current pages between English, French, and Arabic; Arabic uses right-to-left layout. Shared page copy is in `frontend/lib/app_strings.dart` so translations can be extended for additional pages.
+
+To initialize local storage, install the normal backend requirements and run FastAPI as described above. The database and audio directory are created automatically on the first upload or WhatsApp audio message. Tests use temporary database/audio locations and mocked external providers. FFmpeg is still needed for the existing OGG/Opus transcription path.
 
 ## Run the Flutter app
 
@@ -84,6 +92,8 @@ Expose only the webhook through a public HTTPS endpoint and configure the callba
 
 The handler accepts audio messages only after checking the WABA ID and `metadata.phone_number_id`. It queues the media ID and acknowledges quickly. A worker retrieves the media URL with the bearer token, downloads only trusted HTTPS Meta media hosts, verifies the advertised hash, transcribes the temporary file, and translates it. Meta's collection documents the media-ID to URL lookup, short-lived URL, bearer token, and supported audio types: [Meta Cloud API media reference](https://www.postman.com/meta/whatsapp-business-platform/request/fpj02x0/retrieve-media-url) and [media collection](https://www.postman.com/meta/whatsapp-business-platform/folder/13382743-ecb27be5-4d27-4763-bbee-6a8002c04bf3).
 
+For a privacy-safe local run, keep Uvicorn access logging disabled: Meta's GET verification request includes the verify token in its query string. The worker logs successful audio download, transcription, and completion stages without message content, sender numbers, media IDs, or credentials.
+
 ## Verification
 
 ```bash
@@ -97,6 +107,6 @@ flutter test
 flutter build web --release
 ```
 
-The v3 backend suite covers 43 cases, including the v2 behavior, webhook verification, signature checks, queue deduplication, WABA filtering, retries, stale leases, retention, media integrity, and app authentication.
+The v3 backend suite covers app behavior, webhook verification, signature checks, queue deduplication, WABA filtering, retries, stale leases, retention, media integrity, local audio persistence, transcription outcomes, and app authentication.
 
 The native iOS Simulator build has been verified with the `test` simulator. A signed device build, TestFlight upload, and App Store release still require selecting an Apple Developer Team and completing signing in Xcode.

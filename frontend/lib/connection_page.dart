@@ -36,20 +36,22 @@ class _ConnectionPageState extends State<ConnectionPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Connection settings')),
+    appBar: AppBar(title: Text(widget.controller.t('Connection settings'))),
     body: Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600),
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            const Text(
-              'Connect your app',
+            Text(
+              widget.controller.t('Connect your app'),
               style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
-            const Text(
-              'Enter your Voice Notes server address and app access token. Your OpenAI and WhatsApp keys stay on the server.',
+            Text(
+              widget.controller.t(
+                'Enter your Voice Notes server address and app access token. Your OpenAI and WhatsApp keys stay on the server.',
+              ),
             ),
             const SizedBox(height: 24),
             TextField(
@@ -58,8 +60,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
               keyboardType: TextInputType.url,
               autocorrect: false,
               enableSuggestions: false,
-              decoration: const InputDecoration(
-                labelText: 'Server address',
+              decoration: InputDecoration(
+                labelText: widget.controller.t('Server address'),
                 hintText: 'https://voice.example.com',
               ),
             ),
@@ -70,20 +72,26 @@ class _ConnectionPageState extends State<ConnectionPage> {
               obscureText: true,
               autocorrect: false,
               enableSuggestions: false,
-              decoration: const InputDecoration(labelText: 'App access token'),
+              decoration: InputDecoration(
+                labelText: widget.controller.t('App access token'),
+              ),
               onSubmitted: (_) {
                 if (!connecting) connect();
               },
             ),
             const SizedBox(height: 12),
-            const Text(
-              'For this personal prototype, the app keeps this token in memory until you disconnect or close the app.',
+            Text(
+              widget.controller.t(
+                'For this personal prototype, the app keeps this token in memory until you disconnect or close the app.',
+              ),
               style: TextStyle(fontSize: 12),
             ),
             const SizedBox(height: 24),
             FilledButton(
               onPressed: connecting ? null : connect,
-              child: Text(connecting ? 'Connecting…' : 'Connect'),
+              child: Text(
+                widget.controller.t(connecting ? 'Connecting…' : 'Connect'),
+              ),
             ),
             if (widget.controller.connected)
               TextButton(
@@ -93,12 +101,14 @@ class _ConnectionPageState extends State<ConnectionPage> {
                         widget.controller.disconnect();
                         Navigator.pop(context);
                       },
-                child: const Text('Disconnect and clear results'),
+                child: Text(
+                  widget.controller.t('Disconnect and clear results'),
+                ),
               ),
             if (widget.controller.error != null) ...[
               const SizedBox(height: 16),
               Text(
-                widget.controller.error!,
+                widget.controller.t(widget.controller.error!),
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ],

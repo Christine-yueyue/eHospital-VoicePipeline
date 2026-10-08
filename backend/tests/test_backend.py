@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import sqlite3
 import shutil
 import ssl
 import subprocess
@@ -18,6 +19,7 @@ from starlette.websockets import WebSocketDisconnect
 import app as backend
 import live
 import services
+import voice_feedback
 
 
 @pytest.fixture
@@ -26,11 +28,13 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key-not-real")
     monkeypatch.setenv("APP_ACCESS_TOKEN", "test-app-token")
     monkeypatch.setenv("INBOX_DB_PATH", str(tmp_path / 'inbox.sqlite3'))
+    monkeypatch.setenv("VOICE_FEEDBACK_DB_PATH", str(tmp_path / 'voice_feedback.db'))
+    monkeypatch.setenv("VOICE_FEEDBACK_AUDIO_DIR", str(tmp_path / 'audio'))
     with TestClient(backend.app, headers={'Authorization': 'Bearer test-app-token'}) as client:
         yield client
 
 
-def test_upload_returns_both_languages_and_cleans_file(client, monkeypatch):
+def test_upload_returns_both_languages_and_persists_file_and_record(client, monkeypatch):
     paths = []
 
     async def transcribe(path):
@@ -45,7 +49,14 @@ def test_upload_returns_both_languages_and_cleans_file(client, monkeypatch):
     assert response.status_code == 200
     assert response.json()["filename"] == "note.ogg"
     assert response.json()["translation"] == "J’ai besoin d’un rendez-vous vendredi."
-    assert not paths[0].exists()
+    assert paths[0].exists()
+    assert paths[0].read_bytes() == b"sample"
+    with sqlite3.connect(voice_feedback.database_path()) as db:
+        row = db.execute('''SELECT feedback_message, transcription_status, audio_path,
+            audio_mime_type, size_bytes, source FROM voice_feedback''').fetchone()
+    assert row[0:2] == ('I need an appointment on Friday.', 'completed')
+    assert row[3:] == ('audio/ogg', 6, 'upload')
+    assert (voice_feedback.audio_directory() / Path(row[2]).name).resolve() == paths[0].resolve()
     translate.assert_awaited_once_with("I need an appointment on Friday.", "fr")
 
 
@@ -87,7 +98,7 @@ def test_translation_failure_keeps_transcript(client, monkeypatch):
     assert result["translation_error"] == "Usage limit"
 
 
-def test_provider_failure_cleans_upload(client, monkeypatch):
+def test_provider_failure_retains_file_and_marks_record_failed(client, monkeypatch):
     paths = []
 
     async def fail(path):
@@ -96,7 +107,40 @@ def test_provider_failure_cleans_upload(client, monkeypatch):
 
     monkeypatch.setattr(backend, "transcribe_audio", fail)
     assert client.post("/api/transcribe", files={"file": ("a.wav", b"sample")}).status_code == 503
-    assert not paths[0].exists()
+    assert paths[0].exists()
+    with sqlite3.connect(voice_feedback.database_path()) as db:
+        row = db.execute('SELECT feedback_message, transcription_status, last_error FROM voice_feedback').fetchone()
+    assert row[0] is None and row[1] == 'failed'
+    assert 'Provider unavailable' not in row[2]
+
+
+def test_voice_feedback_sqlite_initialization_is_idempotent(tmp_path, monkeypatch):
+    monkeypatch.setenv('VOICE_FEEDBACK_DB_PATH', str(tmp_path / 'nested/voice_feedback.db'))
+    monkeypatch.setenv('VOICE_FEEDBACK_AUDIO_DIR', str(tmp_path / 'nested/audio'))
+    voice_feedback.initialize()
+    voice_feedback.initialize()
+    with sqlite3.connect(voice_feedback.database_path()) as db:
+        table = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='voice_feedback'").fetchone()
+        indexes = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='index'")}
+    assert table == ('voice_feedback',)
+    assert {'idx_voice_feedback_source_message_id', 'idx_voice_feedback_record_time',
+            'idx_voice_feedback_status'} <= indexes
+
+
+def test_global_persistence_setting_controls_upload_and_live_records(client, monkeypatch):
+    assert client.get('/api/config').json()['save_to_database'] is True
+    assert client.post('/api/settings/save-to-database', json={'enabled': False}).json() == {'save_to_database': False}
+    monkeypatch.setattr(backend, 'transcribe_audio', AsyncMock(return_value='Private transcript'))
+    result = client.post('/api/transcribe', files={'file': ('a.wav', b'sample')})
+    assert result.status_code == 200 and result.json()['saved'] is False
+    with sqlite3.connect(voice_feedback.database_path()) as db:
+        assert db.execute('SELECT COUNT(*) FROM voice_feedback').fetchone()[0] == 0
+    assert voice_feedback.save_live_feedback('live words', 'mots en direct', 'fr') is None
+    client.post('/api/settings/save-to-database', json={'enabled': True})
+    assert voice_feedback.save_live_feedback('live words', 'mots en direct', 'fr') == 1
+    with sqlite3.connect(voice_feedback.database_path()) as db:
+        row = db.execute('SELECT source, feedback_message, translation_message, target_language, transcription_status FROM voice_feedback').fetchone()
+    assert row == ('live', 'live words', 'mots en direct', 'fr', 'completed')
 
 
 def test_missing_key(client, monkeypatch):
@@ -223,6 +267,9 @@ def test_live_stream_drains_final_words(client, upstream):
                 break
         assert {m.get("delta") for m in messages} >= {"world.", "Bonjour le monde."}
         assert {m.get("transcript") for m in messages} >= {"Hello world."}
+    with sqlite3.connect(voice_feedback.database_path()) as db:
+        saved = db.execute('SELECT source, feedback_message, translation_message FROM voice_feedback').fetchone()
+    assert saved == ('live', 'Hello world.', 'Bonjour le monde.')
     assert upstream.translation.sent[0]["session"]["audio"]["output"]["language"] == "fr"
     assert base64.b64decode(upstream.translation.sent[1]["audio"]) == b"\x01\x00" * 2400
     assert base64.b64decode(upstream.transcription.sent[1]["audio"]) == b"\x01\x00" * 2400

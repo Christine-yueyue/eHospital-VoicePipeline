@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:voice_notes/main.dart';
 
 void main() {
-  testWidgets('French default and English switch work on a narrow screen', (
+  testWidgets('language selector switches the page to Arabic RTL', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 900);
@@ -13,20 +13,29 @@ void main() {
     await tester.pumpWidget(const VoiceNotesApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('French / Français'), findsOneWidget);
+    expect(find.text('Your voice, in two languages.'), findsOneWidget);
+    expect(find.text('Save to Database'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Start speaking'), 300);
     expect(find.text('Start speaking'), findsOneWidget);
     final upload = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Transcribe & translate'),
+      find.widgetWithText(FilledButton, 'Upload & transcribe'),
     );
     expect(upload.onPressed, isNull);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    final picker = tester.widget<DropdownButton<String>>(
+      find.byKey(const Key('language-picker')),
+    );
+    picker.onChanged!('ar');
     await tester.pumpAndSettle();
-    await tester.tap(find.text('English').last);
+    await tester.drag(find.byType(ListView).first, const Offset(0, 3000));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('English translation'), 300);
-    expect(find.text('English translation'), findsOneWidget);
+    expect(find.text('صوتك بلغتين.'), findsOneWidget);
+    expect(find.text('حفظ في قاعدة البيانات'), findsOneWidget);
+    expect(
+      Directionality.of(tester.element(find.text('صوتك بلغتين.'))),
+      TextDirection.rtl,
+    );
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox());
