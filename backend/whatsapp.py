@@ -9,6 +9,7 @@ import logging
 import os
 import re
 import time
+import uuid
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.parse import urlparse
@@ -19,6 +20,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 import inbox
+import voice_feedback
 from services import LANGUAGES, transcribe_audio, translate_text
 
 router = APIRouter()
@@ -45,7 +47,8 @@ def settings() -> dict:
             invalid.append(name)
     if target not in LANGUAGES:
         invalid.append('WHATSAPP_TARGET_LANGUAGE')
-    return {'configured': not missing and not invalid, 'missing': missing, 'invalid': invalid,
+    return {'configured': not missing and not invalid,
+            'missing': missing, 'invalid': invalid,
             'target_language': target, 'retention_hours': 24}
 
 
@@ -85,9 +88,9 @@ def audio_events(payload: dict) -> list[dict]:
                 if message.get('type') != 'audio':
                     continue
                 message_id, media_id, sender = message.get('id'), message.get('audio', {}).get('id'), message.get('from')
-                if (not isinstance(message_id, str) or not 1 <= len(message_id) <= 512
+                if ((message_id is not None and (not isinstance(message_id, str) or not 1 <= len(message_id) <= 512))
                         or not isinstance(media_id, str) or not re.fullmatch(r'[0-9]{1,100}', media_id)
-                        or not isinstance(sender, str) or not re.fullmatch(r'[0-9]{5,20}', sender)):
+                        or (sender is not None and (not isinstance(sender, str) or not re.fullmatch(r'[0-9]{5,20}', sender)))):
                     continue
                 allowed = {v.strip() for v in os.getenv('WHATSAPP_ALLOWED_SENDERS', '').split(',') if v.strip()}
                 if allowed and sender not in allowed:
@@ -96,12 +99,17 @@ def audio_events(payload: dict) -> list[dict]:
                 timestamp = message.get('timestamp')
                 if timestamp is not None:
                     try:
-                        age = time.time() - int(timestamp)
+                        received_at = int(timestamp)
+                        age = time.time() - received_at
                     except (ValueError, TypeError):
                         continue
                     if age > inbox.RETENTION_SECONDS or age < -300:
                         continue
-                events.append({'id': message_id, 'media_id': media_id, 'sender': sender})
+                else:
+                    received_at = None
+                queue_id = message_id or str(uuid.uuid4())
+                events.append({'id': queue_id, 'message_id': message_id, 'media_id': media_id,
+                               'sender': sender or '', 'received_at': received_at})
     return events
 
 
@@ -125,6 +133,8 @@ async def receive(request: Request):
     # The SQLite transaction commits BEFORE acknowledgement. Slow media/model
     # work is handled by the worker, including recovery after a server restart.
     count = inbox.enqueue(events, settings()['target_language'])
+    if events:
+        logger.info('WhatsApp webhook accepted: %d audio message(s), %d newly queued.', len(events), count)
     return {'received': True, 'queued': count}
 
 
@@ -174,23 +184,54 @@ async def process_once() -> bool:
     if not message:
         return False
     transcript = message['transcript']
+    feedback = None
     try:
         async with asyncio.timeout(240):
-            if not transcript:
+            if not transcript or not message.get('audio_path'):
                 with TemporaryDirectory(prefix='voice-whatsapp-') as directory:
                     path = await download_audio(message['media_id'], Path(directory))
-                    transcript = await transcribe_audio(str(path))
+                    logger.info('WhatsApp audio downloaded and integrity checked (%d bytes).', path.stat().st_size)
+                    mime_type = next((mime for mime, extension in AUDIO_EXTENSIONS.items()
+                                      if extension == path.suffix.lower()), 'application/octet-stream')
+                    if voice_feedback.get_save_to_database():
+                        feedback = voice_feedback.store_audio(path, extension=path.suffix,
+                            mime_type=mime_type, source_message_id=message.get('message_id'),
+                            created_time=message['created'], source='whatsapp')
+                        message['audio_path'] = feedback['audio_path']
+                        inbox.set_audio_path(message, feedback['audio_path'])
+                    if not transcript:
+                        transcript_path = (voice_feedback.audio_directory() / feedback['file_name']) if feedback else path
+                        transcript = await transcribe_audio(str(transcript_path))
+                        logger.info('WhatsApp audio transcription succeeded.')
+            if message.get('audio_path') and voice_feedback.get_save_to_database():
+                voice_feedback.mark_completed(message['audio_path'], transcript)
             translation = await translate_text(transcript, message['target'])
         inbox.finish(message, status='completed', transcript=transcript, translation=translation)
+        logger.info('WhatsApp message processing completed.')
     except HTTPException as exc:
+        if feedback and feedback.get('audio_path') and not transcript:
+            try:
+                voice_feedback.mark_failed(feedback['audio_path'], 'Transcription could not be completed. Check provider settings and retry.')
+            except Exception:
+                logger.warning('Voice feedback status could not be updated; retrying job.')
         inbox.finish(message, status='partial' if transcript else 'failed', transcript=transcript,
                      error=str(exc.detail), retry=exc.status_code == 429 or exc.status_code >= 500)
     except (httpx.HTTPError, TimeoutError):
+        if feedback and feedback.get('audio_path') and not transcript:
+            try:
+                voice_feedback.mark_failed(feedback['audio_path'], 'Transcription could not be completed. Check provider settings and retry.')
+            except Exception:
+                logger.warning('Voice feedback status could not be updated; retrying job.')
         inbox.finish(message, status='partial' if transcript else 'failed', transcript=transcript,
                      error='Could not process this message. Check provider access and retry.', retry=True)
     except Exception:
         # Do not record provider responses, media URLs, tokens or voice content.
         logger.warning('WhatsApp processing failed; private details omitted.')
+        if feedback and feedback.get('audio_path') and not transcript:
+            try:
+                voice_feedback.mark_failed(feedback['audio_path'], 'Transcription could not be completed. Check backend settings and retry.')
+            except Exception:
+                logger.warning('Voice feedback status could not be updated; retrying job.')
         inbox.finish(message, status='partial' if transcript else 'failed', transcript=transcript,
                      error='Message processing failed. Check backend settings and retry.')
     return True

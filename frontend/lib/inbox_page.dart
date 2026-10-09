@@ -12,6 +12,7 @@ class InboxPage extends StatefulWidget {
 }
 
 class _InboxPageState extends State<InboxPage> with WidgetsBindingObserver {
+  String t(String text) => widget.controller.t(text);
   Timer? timer;
   bool loading = false;
   String? error;
@@ -61,7 +62,7 @@ class _InboxPageState extends State<InboxPage> with WidgetsBindingObserver {
         error = null;
       });
     } on FormatException catch (e) {
-      if (mounted) setState(() => error = e.message);
+      if (mounted) setState(() => error = t(e.message));
     } catch (_) {
       if (mounted) {
         setState(
@@ -97,18 +98,20 @@ class _InboxPageState extends State<InboxPage> with WidgetsBindingObserver {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete this result?'),
-        content: const Text(
-          'This removes the saved transcript and translation from your Voice Notes inbox.',
+        title: Text(t('Delete this result?')),
+        content: Text(
+          t(
+            'This removes the saved transcript and translation from your Voice Notes inbox.',
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(t('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+            child: Text(t('Delete')),
           ),
         ],
       ),
@@ -130,13 +133,13 @@ class _InboxPageState extends State<InboxPage> with WidgetsBindingObserver {
               ),
             ),
             IconButton(
-              tooltip: 'Copy $title',
+              tooltip: '${t('Copy text')} $title',
               onPressed: () async {
                 await Clipboard.setData(ClipboardData(text: value));
                 if (!mounted) return;
                 ScaffoldMessenger.of(
                   context,
-                ).showSnackBar(const SnackBar(content: Text('Copied')));
+                ).showSnackBar(SnackBar(content: Text(t('Copied'))));
               },
               icon: const Icon(Icons.copy_outlined, size: 18),
             ),
@@ -154,11 +157,11 @@ class _InboxPageState extends State<InboxPage> with WidgetsBindingObserver {
     final id = message['id'] as String;
     final status = message['status'] as String;
     final statusLabel = switch (status) {
-      'queued' => 'Waiting to process',
-      'processing' => 'Transcribing and translating…',
-      'completed' => 'Ready',
-      'partial' => 'Transcript ready · translation needs retry',
-      _ => 'Processing failed',
+      'queued' => t('Waiting to process'),
+      'processing' => t('Transcribing and translating…'),
+      'completed' => t('Ready'),
+      'partial' => t('Transcript ready · translation needs retry'),
+      _ => t('Processing failed'),
     };
     final date = DateTime.fromMillisecondsSinceEpoch(
       ((message['created'] as num) * 1000).toInt(),
@@ -174,7 +177,9 @@ class _InboxPageState extends State<InboxPage> with WidgetsBindingObserver {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'From ${message['sender']} · $formattedDate',
+              t('From {sender} · {date}')
+                  .replaceAll('{sender}', message['sender'] as String)
+                  .replaceAll('{date}', formattedDate),
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
@@ -184,12 +189,12 @@ class _InboxPageState extends State<InboxPage> with WidgetsBindingObserver {
               const LinearProgressIndicator(),
             ],
             if ((message['transcript'] as String).isNotEmpty)
-              result('Original transcript', message['transcript'] as String),
+              result(t('Original transcript'), message['transcript'] as String),
             if ((message['translation'] as String).isNotEmpty)
               result(
                 message['target'] == 'fr'
-                    ? 'French translation'
-                    : 'English translation',
+                    ? t('French translation')
+                    : t('English translation'),
                 message['translation'] as String,
               ),
             if ((message['error'] as String).isNotEmpty) ...[
@@ -209,14 +214,14 @@ class _InboxPageState extends State<InboxPage> with WidgetsBindingObserver {
                         ? null
                         : () => action('retry', id),
                     icon: const Icon(Icons.refresh),
-                    label: const Text('Retry'),
+                    label: Text(t('Retry')),
                   ),
                 TextButton.icon(
                   onPressed: pendingActions.contains(id)
                       ? null
                       : () => delete(id),
                   icon: const Icon(Icons.delete_outline),
-                  label: const Text('Delete'),
+                  label: Text(t('Delete')),
                 ),
               ],
             ),
@@ -229,10 +234,10 @@ class _InboxPageState extends State<InboxPage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('WhatsApp inbox'),
+      title: Text(t('WhatsApp inbox')),
       actions: [
         IconButton(
-          tooltip: 'Refresh inbox',
+          tooltip: t('Refresh inbox'),
           onPressed: loading ? null : refresh,
           icon: const Icon(Icons.refresh),
         ),
@@ -247,25 +252,34 @@ class _InboxPageState extends State<InboxPage> with WidgetsBindingObserver {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(24),
             children: [
-              const Text(
-                'Voice messages, translated.',
+              Text(
+                t('Voice messages, translated.'),
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 12),
-              const Text(
-                'Send a voice message to your connected WhatsApp business number. Your original words and translation will appear here.',
+              Text(
+                t(
+                  'Send a voice message to your connected WhatsApp business number. Your original words and translation will appear here.',
+                ),
               ),
               const SizedBox(height: 12),
               Text(
-                'Results are kept for 24 hours. Refreshes every 5 seconds while this screen is open. Translation: ${settings['target_language'] == 'en' ? 'English' : 'French'}.',
+                t(
+                  'Results are kept for 24 hours. Refreshes every 5 seconds while this screen is open. Translation: {language}.',
+                ).replaceAll(
+                  '{language}',
+                  t(settings['target_language'] == 'en' ? 'English' : 'French'),
+                ),
               ),
               const SizedBox(height: 24),
               if (settings.isNotEmpty && settings['configured'] != true)
-                const Card(
+                Card(
                   child: Padding(
-                    padding: EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16),
                     child: Text(
-                      'WhatsApp setup is still needed on your server. Complete the Meta configuration, then refresh.',
+                      t(
+                        'WhatsApp setup is still needed on your server. Complete the Meta configuration, then refresh.',
+                      ),
                     ),
                   ),
                 ),
@@ -273,7 +287,7 @@ class _InboxPageState extends State<InboxPage> with WidgetsBindingObserver {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
                   child: Text(
-                    error!,
+                    t(error!),
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.error,
                     ),
@@ -281,9 +295,9 @@ class _InboxPageState extends State<InboxPage> with WidgetsBindingObserver {
                 ),
               if (loading && messages.isEmpty) const LinearProgressIndicator(),
               if (!loading && messages.isEmpty && error == null)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 40),
-                  child: Center(child: Text('No voice messages yet.')),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 40),
+                  child: Center(child: Text(t('No voice messages yet.'))),
                 ),
               ...messages.map(messageCard),
             ],

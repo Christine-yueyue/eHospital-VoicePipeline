@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import sqlite3
 import time
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -15,6 +16,7 @@ from starlette.websockets import WebSocketDisconnect
 import app as backend
 import inbox
 import whatsapp
+import voice_feedback
 
 
 @pytest.fixture
@@ -26,6 +28,8 @@ def configured(monkeypatch, tmp_path):
         'WHATSAPP_WABA_ID': '222', 'WHATSAPP_GRAPH_VERSION': 'v23.0',
         'WHATSAPP_TARGET_LANGUAGE': 'fr', 'WHATSAPP_ALLOWED_SENDERS': '',
         'INBOX_DB_PATH': str(tmp_path / 'inbox.sqlite3'),
+        'VOICE_FEEDBACK_DB_PATH': str(tmp_path / 'voice_feedback.db'),
+        'VOICE_FEEDBACK_AUDIO_DIR': str(tmp_path / 'audio'),
     }
     for key, value in values.items():
         monkeypatch.setenv(key, value)
@@ -116,6 +120,24 @@ def test_durable_deduplication_and_tenant_filter(client, monkeypatch):
         assert db.execute('SELECT COUNT(*) FROM messages').fetchone()[0] == 1
 
 
+def test_duplicate_webhook_delivery_creates_one_feedback_document(client, processing):
+    assert send(client, payload()).json()['queued'] == 1
+    assert send(client, payload()).json()['queued'] == 0
+    assert asyncio.run(whatsapp.process_once()) is True
+    with sqlite3.connect(voice_feedback.database_path()) as db:
+        rows = db.execute('SELECT source_message_id, source FROM voice_feedback').fetchall()
+    assert rows == [('wamid.test', 'whatsapp')]
+
+
+def test_global_setting_skips_whatsapp_persistence_when_off(client, processing):
+    assert client.post('/api/settings/save-to-database', json={'enabled': False}).status_code == 200
+    assert send(client, payload()).json()['queued'] == 1
+    assert asyncio.run(whatsapp.process_once()) is True
+    with sqlite3.connect(voice_feedback.database_path()) as db:
+        assert db.execute('SELECT COUNT(*) FROM voice_feedback').fetchone()[0] == 0
+    assert inbox.list_messages()[0]['transcript'] == 'Friday at three.'
+
+
 def test_status_and_non_audio_events_are_acknowledged(client):
     data = payload()
     value = data['entry'][0]['changes'][0]['value']
@@ -161,6 +183,48 @@ def test_worker_processes_queued_audio_and_cleans_temporary_file(client, process
     assert row['translation'] == 'Vendredi à quinze heures.'
     assert not processing[0][0].exists()
     assert asyncio.run(whatsapp.process_once()) is False
+
+
+def test_voice_feedback_persists_audio_location_and_transcript(client, processing):
+    send(client, payload())
+    assert asyncio.run(whatsapp.process_once()) is True
+    with sqlite3.connect(voice_feedback.database_path()) as db:
+        row = db.execute('''SELECT feedback_message, transcription_status, audio_path,
+            audio_mime_type, source_message_id, size_bytes, record_id
+            FROM voice_feedback''').fetchone()
+    transcript, status, relative_path, mime_type, message_id, size, record_id = row
+    saved_path = voice_feedback.audio_directory() / Path(relative_path).name
+    assert saved_path.read_bytes() == b'mocked audio'
+    assert (transcript, status, mime_type, message_id, size, record_id) == (
+        'Friday at three.', 'completed', 'audio/ogg', 'wamid.test', len(b'mocked audio'), None)
+
+
+def test_transcription_failure_retains_audio_and_marks_document_failed(client, processing):
+    processing[1].side_effect = HTTPException(400, 'private provider detail')
+    send(client, payload())
+    assert asyncio.run(whatsapp.process_once()) is True
+    with sqlite3.connect(voice_feedback.database_path()) as db:
+        transcript, status, relative_path, last_error = db.execute('''SELECT feedback_message,
+            transcription_status, audio_path, last_error FROM voice_feedback''').fetchone()
+    assert status == 'failed'
+    assert 'private provider detail' not in last_error
+    assert transcript is None
+    assert (voice_feedback.audio_directory() / Path(relative_path).name).read_bytes() == b'mocked audio'
+
+
+def test_missing_optional_message_and_sender_fields(client, processing):
+    data = payload()
+    message = data['entry'][0]['changes'][0]['value']['messages'][0]
+    message.pop('id')
+    message.pop('from')
+    assert send(client, data).json()['queued'] == 1
+    assert asyncio.run(whatsapp.process_once()) is True
+    with sqlite3.connect(voice_feedback.database_path()) as db:
+        row = db.execute('''SELECT source_message_id, record_id, created_time,
+            transcription_status, source FROM voice_feedback''').fetchone()
+    assert row[0] is None and row[1] is None
+    assert row[2].endswith('+00:00')
+    assert row[3:] == ('completed', 'whatsapp')
 
 
 def test_retry_reuses_successful_transcript(client, processing):

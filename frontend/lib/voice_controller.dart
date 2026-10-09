@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:record/record.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'app_strings.dart';
 
 enum VoiceState { idle, uploading, connecting, listening, finishing }
 
@@ -22,6 +23,8 @@ class VoiceController extends ChangeNotifier {
   String baseUrl;
   String _accessToken = '';
   bool connected = false;
+  bool saveToDatabase = true;
+  String localeCode = 'en';
   Map<String, dynamic> whatsapp = {};
   final AudioRecorder _recorder = AudioRecorder();
   final http.Client _http;
@@ -53,6 +56,38 @@ class VoiceController extends ChangeNotifier {
   bool get busy => state != VoiceState.idle;
   bool get hasFile => _fileBytes != null;
   String get targetName => targetLanguage == 'fr' ? 'French' : 'English';
+  String t(String text) => AppStrings.translate(localeCode, text);
+
+  void setLocale(String value) {
+    if (!{'en', 'fr', 'ar'}.contains(value)) return;
+    localeCode = value;
+    _notify();
+  }
+
+  Future<void> setSaveToDatabase(bool enabled) async {
+    if (!connected || busy) return;
+    final previous = saveToDatabase;
+    saveToDatabase = enabled;
+    error = null;
+    _notify();
+    try {
+      final response = await _http
+          .post(
+            _url('/api/settings/save-to-database'),
+            headers: {..._headers, 'Content-Type': 'application/json'},
+            body: jsonEncode({'enabled': enabled}),
+          )
+          .timeout(const Duration(seconds: 10));
+      final body = _responseBody(response);
+      saveToDatabase = body['save_to_database'] == true;
+    } catch (_) {
+      saveToDatabase = previous;
+      error = t(
+        'Could not update the database setting. Check the connection and try again.',
+      );
+    }
+    _notify();
+  }
 
   void _notify() {
     if (!_disposed) notifyListeners();
@@ -137,6 +172,7 @@ class VoiceController extends ChangeNotifier {
       connected = true;
       maxUploadBytes = (body['max_upload_bytes'] as num).toInt();
       whatsapp = body['whatsapp'] as Map<String, dynamic>;
+      saveToDatabase = body['save_to_database'] != false;
       transcript = '';
       translation = '';
       _translationFallback = false;
@@ -209,6 +245,7 @@ class VoiceController extends ChangeNotifier {
       if (response.statusCode == 200) {
         maxUploadBytes = (jsonDecode(response.body)['max_upload_bytes'] as num)
             .toInt();
+        saveToDatabase = jsonDecode(response.body)['save_to_database'] != false;
         _notify();
       }
     } catch (_) {

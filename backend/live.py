@@ -15,6 +15,7 @@ from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 from services import api_key, check_target
 from auth import authenticate_socket
+import voice_feedback
 
 live_router = APIRouter()
 MAX_SESSION_SECONDS = 600
@@ -55,9 +56,12 @@ async def _wait_for_session_update(upstream) -> None:
                 return
 
 
-async def relay(websocket: WebSocket, translation_upstream, transcription_upstream) -> None:
+async def relay(websocket: WebSocket, translation_upstream, transcription_upstream,
+                target_language: str = 'fr') -> None:
     """Relay one microphone stream to translation and source-transcription sessions."""
     stop_requested = asyncio.Event()
+    final_transcript = ''
+    translated_text = ''
 
     def audio_event(chunk: bytes) -> str:
         return json.dumps({
@@ -101,12 +105,15 @@ async def relay(websocket: WebSocket, translation_upstream, transcription_upstre
                 raise HTTPException(400, "Unsupported live audio message.")
 
     async def from_provider():
+        nonlocal translated_text
         async for raw in translation_upstream:
             event = json.loads(raw)
             kind = event.get("type")
             if kind == "error":
                 raise upstream_error(event)
             if kind in {"session.input_transcript.delta", "session.output_transcript.delta"}:
+                if kind == 'session.output_transcript.delta':
+                    translated_text += event.get('delta', '')
                 await websocket.send_json({
                     "type": "source.delta" if kind == "session.input_transcript.delta" else "translation.delta",
                     "delta": event.get("delta", ""),
@@ -119,6 +126,7 @@ async def relay(websocket: WebSocket, translation_upstream, transcription_upstre
         raise HTTPException(502, "The live service disconnected before finishing. Please start again.")
 
     async def from_transcriber():
+        nonlocal final_transcript
         async for raw in transcription_upstream:
             event = json.loads(raw)
             kind = event.get("type")
@@ -135,6 +143,7 @@ async def relay(websocket: WebSocket, translation_upstream, transcription_upstre
                 # transcript when it arrives.
                 transcript = event.get("transcript", "")
                 if transcript:
+                    final_transcript = transcript
                     await websocket.send_json({
                         "type": "source.final",
                         "transcript": transcript,
@@ -156,6 +165,12 @@ async def relay(websocket: WebSocket, translation_upstream, transcription_upstre
                 asyncio.gather(translation_task, transcription_task),
                 timeout=30,
             )
+            if final_transcript.strip():
+                voice_feedback.save_live_feedback(
+                    final_transcript.strip(),
+                    (translated_text or final_transcript).strip(),
+                    target_language,
+                )
             await websocket.send_json({"type": "done"})
         else:
             # Surface provider errors immediately instead of waiting for the
@@ -226,7 +241,7 @@ async def live(websocket: WebSocket):
                     }))
                     await _wait_for_session_update(transcription_upstream)
                     await websocket.send_json({"type": "ready", "sample_rate": 24000})
-                    await relay(websocket, upstream, transcription_upstream)
+                    await relay(websocket, upstream, transcription_upstream, target)
     except WebSocketDisconnect:
         pass
     except HTTPException as exc:

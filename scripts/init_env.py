@@ -13,7 +13,7 @@ args = parser.parse_args()
 version_root = Path(__file__).resolve().parents[1]
 destination = version_root / 'backend/.env'
 if destination.exists():
-    print('v3/backend/.env already exists; no changes made.')
+    print('backend/.env already exists; no changes made.')
     raise SystemExit(0)
 
 values = {
@@ -37,4 +37,4 @@ for line in (version_root / 'backend/.env.example').read_text().splitlines():
 descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
 with os.fdopen(descriptor, 'w') as output:
     output.write('\n'.join(lines) + '\n')
-print('Created private v3/backend/.env. Fill the Meta fields locally. No secrets printed.')
+print('Created private backend/.env. Fill the Meta fields locally. No secrets printed.')
