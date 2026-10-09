@@ -1,17 +1,14 @@
-# voice_notes
+# Voice Notes frontend
 
-A new Flutter project.
+This Flutter app provides Upload, Speak Live, and the WhatsApp inbox. For complete backend, Meta, database, iOS, and verification instructions, see the [project README](../README.md).
 
-## Getting Started
+## Run locally
 
-This project is a starting point for a Flutter application.
+Use Flutter with Dart 3.10 or newer. From this directory:
 
-A few resources to get you started if this is your first Flutter project:
+```bash
+flutter pub get
+flutter run -d chrome --web-port 5174
+```
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+If Chrome is not available as a Flutter device, run `flutter run -d web-server --web-port 5174 --web-hostname 127.0.0.1` and open `http://127.0.0.1:5174`. In **Connection settings**, connect to the backend at `http://127.0.0.1:8003` and enter the local `APP_ACCESS_TOKEN` from `backend/.env`.
