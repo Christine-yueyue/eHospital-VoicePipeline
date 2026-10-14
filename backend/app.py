@@ -49,6 +49,25 @@ app = FastAPI(title="Voice Notes v3 — iOS & WhatsApp", lifespan=lifespan)
 
 
 @app.middleware("http")
+async def log_whatsapp_webhook(request: Request, call_next):
+    if request.method != 'POST' or request.url.path != '/webhooks/whatsapp':
+        return await call_next(request)
+    # Never log the URL/query, headers, body, or exception details. GET
+    # verification includes a secret in its query and is deliberately excluded.
+    request.state.whatsapp_signature = 'not_checked'
+    whatsapp.logger.info('WhatsApp webhook POST reached.')
+    try:
+        response = await call_next(request)
+    except Exception:
+        whatsapp.logger.warning('WhatsApp webhook response: status=500 signature=%s.',
+                                request.state.whatsapp_signature)
+        raise
+    whatsapp.logger.info('WhatsApp webhook response: status=%d signature=%s.',
+                         response.status_code, request.state.whatsapp_signature)
+    return response
+
+
+@app.middleware("http")
 async def protect_api(request: Request, call_next):
     if request.url.path.startswith('/api/') and request.method != 'OPTIONS':
         if not app_token():
