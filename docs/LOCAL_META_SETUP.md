@@ -9,7 +9,7 @@ Keep all credentials in `backend/.env` on the backend machine. The file is ignor
 ```bash
 git clone https://github.com/Christine-yueyue/eHospital-VoicePipeline.git voice-text-project
 cd voice-text-project
-git switch --track origin/codex/webhook-debugging
+git switch --track origin/feature/webhook-debugging
 ```
 
 The explicit branch selection is needed while this work remains unmerged. Later, use the branch containing this guide.

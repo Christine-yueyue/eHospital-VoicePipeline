@@ -4,7 +4,7 @@ v3 is a separate copy of the v2 Flutter + FastAPI app. It keeps file upload, Eng
 
 The app never contains OpenAI or Meta credentials. The iOS app only receives the separate `APP_ACCESS_TOKEN` used to access this backend.
 
-For a complete, copyable setup on a fresh machine—including the local app, Meta account, WABA subscription, and public webhook—follow the [English local and Meta setup guide](docs/LOCAL_META_SETUP.md). The steps below are a shorter reference for an existing checkout.
+For a complete, copyable setup on a fresh machine—including the local app, Meta account, WABA subscription, and public webhook—follow the [local and Meta setup guide](docs/LOCAL_META_SETUP.md). The steps below are a shorter reference for an existing checkout.
 
 ## Requirements
 
@@ -21,7 +21,7 @@ Clone this repository and, while the webhook work is on its own unmerged branch,
 ```bash
 git clone https://github.com/Christine-yueyue/eHospital-VoicePipeline.git voice-text-project
 cd voice-text-project
-git switch --track origin/codex/webhook-debugging
+git switch --track origin/feature/webhook-debugging
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
