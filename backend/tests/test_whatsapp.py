@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import sqlite3
 import time
 from pathlib import Path
@@ -148,6 +149,85 @@ def test_status_and_non_audio_events_are_acknowledged(client):
     assert send(client, data).json()['queued'] == 0
 
 
+@pytest.mark.parametrize(('case', 'status', 'signature_state'), [
+    ('unsigned', 403, 'failed'),
+    ('tampered', 403, 'failed'),
+    ('invalid_json', 400, 'passed'),
+    ('unconfigured', 503, 'not_checked'),
+    ('oversized', 413, 'not_checked'),
+])
+def test_webhook_rejection_logs_are_safe(client, configured, monkeypatch, caplog,
+                                       case, status, signature_state):
+    caplog.set_level(logging.INFO, logger=whatsapp.logger.name)
+    raw = b'private malformed request body'
+    signature = 'sha256=' + hmac.new(b'meta-secret', raw, hashlib.sha256).hexdigest()
+    headers = {'X-Hub-Signature-256': signature, 'X-Private': 'private header'}
+    if case == 'unsigned':
+        headers.pop('X-Hub-Signature-256')
+    elif case == 'tampered':
+        raw += b' modified'
+    elif case == 'unconfigured':
+        monkeypatch.delenv('WHATSAPP_APP_SECRET')
+    elif case == 'oversized':
+        monkeypatch.setattr(whatsapp, 'MAX_WEBHOOK_BYTES', 1)
+    response = client.post('/webhooks/whatsapp?private=private-query', content=raw, headers=headers)
+    assert response.status_code == status
+    records = [r for r in caplog.records if r.name == whatsapp.logger.name]
+    logs = '\n'.join(r.getMessage() for r in records)
+    assert 'WhatsApp webhook POST reached.' in logs
+    assert f'status={status} signature={signature_state}' in logs
+    assert ('signature verified' in logs) == (signature_state == 'passed')
+    for private in [raw.decode(), signature, 'private header', 'private-query',
+                    configured['WHATSAPP_APP_SECRET'], configured['APP_ACCESS_TOKEN']]:
+        assert private not in logs
+    assert all(r.exc_info is None for r in records)
+
+
+@pytest.mark.parametrize('kind', ['audio', 'text', 'other_waba'])
+def test_webhook_logs_accepted_and_filtered_events(client, caplog, kind):
+    caplog.set_level(logging.INFO, logger=whatsapp.logger.name)
+    data = payload(message_id='private-message-id')
+    message = data['entry'][0]['changes'][0]['value']['messages'][0]
+    message['text'] = {'body': 'private-message-content'}
+    if kind == 'text':
+        message['type'] = 'text'
+    elif kind == 'other_waba':
+        data['entry'][0]['id'] = '999'
+    count = 1 if kind == 'audio' else 0
+    assert send(client, data).json()['queued'] == count
+    logs = '\n'.join(r.getMessage() for r in caplog.records if r.name == whatsapp.logger.name)
+    assert 'POST reached' in logs
+    assert 'signature verified' in logs
+    assert f'{count} matching audio message(s), {count} newly queued' in logs
+    assert 'status=200 signature=passed' in logs
+    for private in ('private-message-id', 'private-message-content', message['from'], 'meta-secret'):
+        assert private not in logs
+
+
+def test_webhook_logs_unexpected_failure_without_exception_details(configured, monkeypatch, caplog):
+    caplog.set_level(logging.INFO, logger=whatsapp.logger.name)
+
+    def unavailable(*args):
+        raise RuntimeError('private-storage-detail')
+
+    monkeypatch.setattr(inbox, 'enqueue', unavailable)
+    with TestClient(backend.app, raise_server_exceptions=False) as client:
+        assert send(client, payload()).status_code == 500
+    records = [r for r in caplog.records if r.name == whatsapp.logger.name]
+    logs = '\n'.join(r.getMessage() for r in records)
+    assert 'status=500 signature=passed' in logs
+    assert 'private-storage-detail' not in logs
+    assert all(r.exc_info is None for r in records)
+
+
+def test_get_verification_is_excluded_from_webhook_diagnostics(client, caplog):
+    caplog.set_level(logging.INFO, logger=whatsapp.logger.name)
+    response = client.get('/webhooks/whatsapp', params={
+        'hub.mode': 'subscribe', 'hub.verify_token': 'verify-secret', 'hub.challenge': '12345'})
+    assert response.status_code == 200
+    assert not [r for r in caplog.records if r.name == whatsapp.logger.name]
+
+
 def test_queue_limit_rolls_back_webhook_batch(client, monkeypatch):
     monkeypatch.setattr(inbox, 'MAX_PENDING', 1)
     data = payload()
@@ -174,9 +254,14 @@ def processing(monkeypatch):
     return paths, transcription, translation
 
 
-def test_worker_processes_queued_audio_and_cleans_temporary_file(client, processing):
+def test_worker_processes_queued_audio_and_cleans_temporary_file(client, processing, caplog):
+    caplog.set_level(logging.INFO, logger=whatsapp.logger.name)
     send(client, payload())
     assert asyncio.run(whatsapp.process_once()) is True
+    logs = '\n'.join(r.getMessage() for r in caplog.records if r.name == whatsapp.logger.name)
+    assert 'WhatsApp message processing started.' in logs
+    assert 'WhatsApp message processing completed.' in logs
+    assert 'Friday at three.' not in logs
     row = inbox.list_messages()[0]
     assert row['status'] == 'completed'
     assert row['transcript'] == 'Friday at three.'
@@ -354,3 +439,58 @@ def test_download_auth_integrity_and_stream_size(configured, monkeypatch, tmp_pa
     with pytest.raises(HTTPException) as error:
         asyncio.run(whatsapp.download_audio('333', tmp_path))
     assert error.value.status_code == 413
+
+
+@pytest.mark.parametrize(('stage', 'status', 'code', 'error_text'), [
+    ('metadata', 401, 190, 'Meta rejected WHATSAPP_ACCESS_TOKEN'),
+    ('metadata', 400, 190, 'Meta rejected WHATSAPP_ACCESS_TOKEN'),
+    ('metadata', 401, None, 'Meta rejected WHATSAPP_ACCESS_TOKEN'),
+    ('metadata', 403, 200, 'Meta denied access'),
+    ('download', 401, None, 'Meta rejected WHATSAPP_ACCESS_TOKEN'),
+    ('download', 403, None, 'Meta denied access'),
+])
+def test_media_auth_failure_is_actionable_safe_and_not_retried(
+        client, monkeypatch, caplog, stage, status, code, error_text):
+    real_client = httpx.AsyncClient
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        if stage == 'download' and request.url.host == 'graph.facebook.com':
+            return httpx.Response(200, json={
+                'url': 'https://lookaside.fbsbx.com/private-media?secret=private-url-token',
+                'mime_type': 'audio/ogg'})
+        if code is None:
+            return httpx.Response(status, text='private-provider-error')
+        return httpx.Response(status, json={'error': {
+            'code': code, 'message': 'private-provider-error meta-test-token'}})
+
+    monkeypatch.setattr(whatsapp.httpx, 'AsyncClient', lambda **kw: real_client(
+        transport=httpx.MockTransport(handler), **kw))
+    transcription = AsyncMock()
+    monkeypatch.setattr(whatsapp, 'transcribe_audio', transcription)
+    caplog.set_level(logging.INFO, logger=whatsapp.logger.name)
+    assert send(client, payload()).json()['queued'] == 1
+    assert asyncio.run(whatsapp.process_once()) is True
+    row = inbox.list_messages()[0]
+    assert row['status'] == 'failed'
+    assert error_text in row['error']
+    assert 'Retry' in row['error']
+    assert asyncio.run(whatsapp.process_once()) is False
+    assert len(requests) == (2 if stage == 'download' else 1)
+    transcription.assert_not_awaited()
+    logs = '\n'.join(r.getMessage() for r in caplog.records if r.name == whatsapp.logger.name)
+    assert f'stage={stage} status={status}' in logs
+    for private in ('private-provider-error', 'meta-test-token', 'private-url-token', 'private-media'):
+        assert private not in logs
+        assert private not in row['error']
+
+
+@pytest.mark.parametrize('status', [429, 500])
+def test_media_transient_failure_still_retries(client, monkeypatch, status):
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(whatsapp.httpx, 'AsyncClient', lambda **kw: real_client(
+        transport=httpx.MockTransport(lambda request: httpx.Response(status)), **kw))
+    send(client, payload())
+    assert asyncio.run(whatsapp.process_once()) is True
+    assert inbox.list_messages()[0]['status'] == 'queued'

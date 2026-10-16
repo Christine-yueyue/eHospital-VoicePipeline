@@ -24,7 +24,9 @@ import voice_feedback
 from services import LANGUAGES, transcribe_audio, translate_text
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+# Use Uvicorn's configured console handler/level even with --no-access-log.
+# A standalone module logger otherwise inherits the root WARNING level.
+logger = logging.getLogger('uvicorn.error.whatsapp')
 REQUIRED = ('WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_APP_SECRET', 'WHATSAPP_VERIFY_TOKEN',
             'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_WABA_ID', 'WHATSAPP_GRAPH_VERSION')
 MAX_MEDIA_BYTES = 16_000_000
@@ -124,7 +126,10 @@ async def receive(request: Request):
     expected = 'sha256=' + hmac.new(os.environ['WHATSAPP_APP_SECRET'].encode(), raw, hashlib.sha256).hexdigest()
     actual = request.headers.get('x-hub-signature-256', '')
     if not hmac.compare_digest(expected.encode(), actual.encode()):
+        request.state.whatsapp_signature = 'failed'
         raise HTTPException(403, 'Invalid webhook signature.')
+    request.state.whatsapp_signature = 'passed'
+    logger.info('WhatsApp webhook signature verified.')
     try:
         payload = json.loads(raw)
         events = audio_events(payload)
@@ -133,9 +138,35 @@ async def receive(request: Request):
     # The SQLite transaction commits BEFORE acknowledgement. Slow media/model
     # work is handled by the worker, including recovery after a server restart.
     count = inbox.enqueue(events, settings()['target_language'])
-    if events:
-        logger.info('WhatsApp webhook accepted: %d audio message(s), %d newly queued.', len(events), count)
+    logger.info('WhatsApp webhook accepted: %d matching audio message(s), %d newly queued.', len(events), count)
     return {'received': True, 'queued': count}
+
+
+def check_media_response(response: httpx.Response, *, stage: str) -> None:
+    if response.is_success:
+        return
+    code = None
+    if stage == 'metadata':
+        # Only read the small Graph error response, never a streaming audio body.
+        try:
+            body = response.json()
+        except ValueError:
+            body = None
+        error = body.get('error') if isinstance(body, dict) else None
+        if isinstance(error, dict) and type(error.get('code')) is int:
+            code = error['code']
+    # Provider messages and exception strings can contain tokens or media URLs.
+    logger.warning('WhatsApp media request failed: stage=%s status=%d meta_code=%s.',
+                   stage, response.status_code, code)
+    if response.status_code == 401 or code == 190:
+        raise HTTPException(401,
+            'Meta rejected WHATSAPP_ACCESS_TOKEN. It may be expired or invalid. '
+            'Update it in backend/.env, restart FastAPI, then tap Retry.')
+    if response.status_code == 403:
+        raise HTTPException(403,
+            'Meta denied access to the WhatsApp audio. Check WHATSAPP_ACCESS_TOKEN '
+            'permissions and access to the configured WhatsApp number, then tap Retry.')
+    response.raise_for_status()
 
 
 async def download_audio(media_id: str, directory: Path) -> Path:
@@ -145,7 +176,7 @@ async def download_audio(media_id: str, directory: Path) -> Path:
     async with httpx.AsyncClient(timeout=45, follow_redirects=False) as client:
         response = await client.get(f'https://graph.facebook.com/{version}/{media_id}',
             params={'phone_number_id': os.environ['WHATSAPP_PHONE_NUMBER_ID']}, headers=headers)
-        response.raise_for_status()
+        check_media_response(response, stage='metadata')
         metadata = response.json()
         url = urlparse(metadata['url'])
         hostname = url.hostname or ''
@@ -162,7 +193,7 @@ async def download_audio(media_id: str, directory: Path) -> Path:
         size = 0
         digest = hashlib.sha256()
         async with client.stream('GET', metadata['url'], headers=headers) as media:
-            media.raise_for_status()
+            check_media_response(media, stage='download')
             with path.open('wb') as output:
                 async for chunk in media.aiter_bytes(64 * 1024):
                     size += len(chunk)
@@ -183,6 +214,7 @@ async def process_once() -> bool:
     message = inbox.claim()
     if not message:
         return False
+    logger.info('WhatsApp message processing started.')
     transcript = message['transcript']
     feedback = None
     try:
