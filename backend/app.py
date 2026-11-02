@@ -23,6 +23,7 @@ from live import live_router
 from auth import app_token, authorized
 import whatsapp
 import voice_feedback
+import followup
 
 ALLOWED_EXTENSIONS = {".ogg", ".opus", ".mp3", ".wav", ".m4a", ".webm"}
 try:
@@ -87,6 +88,7 @@ app.add_middleware(
 )
 app.include_router(live_router)
 app.include_router(whatsapp.router)
+app.include_router(followup.router)
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -102,7 +104,7 @@ async def validation_error(_request: Request, _exc: RequestValidationError):
 @app.get("/api/config")
 async def config():
     return {"max_upload_bytes": MAX_UPLOAD_BYTES, "allowed_extensions": sorted(ALLOWED_EXTENSIONS),
-            "languages": LANGUAGES, "live_sample_rate": 24000, "version": "3.0.0",
+            "languages": LANGUAGES, "live_sample_rate": 24000, "version": "3.3.0",
             "whatsapp": whatsapp.settings(),
             "save_to_database": voice_feedback.get_save_to_database()}
 
@@ -118,7 +120,7 @@ async def update_save_setting(setting: SaveSetting):
 
 @app.get('/health')
 async def health():
-    return {'status': 'ok', 'version': '3.0.0'}
+    return {'status': 'ok', 'version': '3.3.0'}
 
 
 @app.post("/api/transcribe")

@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'voice_controller.dart';
 import 'connection_page.dart';
 import 'inbox_page.dart';
+import 'assistant_overlay.dart';
 
 void main() => runApp(const VoiceNotesApp());
 
@@ -19,6 +20,7 @@ class VoiceNotesApp extends StatefulWidget {
 
 class _VoiceNotesAppState extends State<VoiceNotesApp> {
   final controller = VoiceController();
+  final navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void dispose() {
@@ -30,6 +32,7 @@ class _VoiceNotesAppState extends State<VoiceNotesApp> {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: controller,
     builder: (context, _) => MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Voice Notes v3',
       debugShowCheckedModeBanner: false,
       locale: Locale(controller.localeCode),
@@ -47,7 +50,11 @@ class _VoiceNotesAppState extends State<VoiceNotesApp> {
           border: OutlineInputBorder(),
         ),
       ),
-      home: VoiceHome(controller: controller),
+      home: AssistantOverlay(
+        controller: controller,
+        navigatorKey: navigatorKey,
+        child: VoiceHome(controller: controller),
+      ),
     ),
   );
 }
