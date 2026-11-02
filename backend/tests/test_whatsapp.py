@@ -405,7 +405,10 @@ def test_no_provider_secrets_in_config(client, configured):
 
 
 @pytest.mark.parametrize('url', ['http://lookaside.fbsbx.com/a', 'https://evil.example/a',
-    'https://lookaside.fbsbx.com.evil.example/a', 'https://lookaside.fbsbx.com:444/a'])
+    'https://lookaside.fbsbx.com.evil.example/a', 'https://lookaside.fbsbx.com:444/a',
+    'https://127.0.0.1/a', 'https://169.254.169.254/latest/meta-data',
+    'https://metadata.google.internal/a', 'https://fbcdn.net.evil.example/a',
+    'https://user:password@lookaside.fbsbx.com/a', 'file:///etc/passwd'])
 def test_download_rejects_untrusted_urls(configured, monkeypatch, tmp_path, url):
     requests = []
     real_client = httpx.AsyncClient

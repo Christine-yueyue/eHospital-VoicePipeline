@@ -91,6 +91,8 @@ async def relay(websocket: WebSocket, translation_upstream, transcription_upstre
                 await translation_upstream.send(audio_event(chunk))
                 await transcription_upstream.send(transcription_audio_event(chunk))
             elif message.get("text"):
+                if len(message['text'].encode('utf-8')) > 256:
+                    raise HTTPException(400, "Live audio control message is too large.")
                 try:
                     control = json.loads(message["text"])
                 except (ValueError, TypeError):

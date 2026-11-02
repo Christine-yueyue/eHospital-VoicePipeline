@@ -178,4 +178,12 @@ flutter build web --release
 
 The v3 backend suite covers app behavior, webhook verification, signature checks, queue deduplication, WABA filtering, retries, stale leases, retention, media integrity, local audio persistence, transcription outcomes, and app authentication.
 
+## Security design and regression checks
+
+See the [security design](docs/SECURITY_DESIGN.md) for the threat model, implemented controls, verification status, and production requirements. The backend now bounds authenticated request bodies before multipart/JSON parsing, limits HTTP concurrency and body-read time, and restricts database and new audio file permissions. Additional adversarial tests cover API admission, WebSocket authentication, prompt injection, consent, outbound send guards, and media SSRF.
+
+Contacts created through the AI assistant start with permission **unknown**. Use **Record permission** to review the contact, choose a permission status, and supply its source when granting it. Permission changes are saved through a separate authenticated action. Then create a fresh follow-up, review the verified template, and select **Confirm and send**. Model output and chat history cannot authorize permission changes.
+
+Tests disable private dotenv loading and use temporary storage and mocked external services. The security CI definition runs backend regressions and dependency auditing when pushed; its results still need to be checked. The shared app token remains a single-owner prototype credential. Persisted audio/feedback and follow-up records do not inherit the inbox's 24-hour retention policy. Multi-user authorization, complete deletion/retention, encryption, and deployment limits remain required before production use with sensitive data.
+
 The native iOS Simulator build has been verified with the `test` simulator. A signed device build, TestFlight upload, and App Store release still require selecting an Apple Developer Team and completing signing in Xcode.

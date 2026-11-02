@@ -2,9 +2,12 @@
 
 import asyncio
 import hmac
+import json
 import os
 
 from fastapi import WebSocket
+
+MAX_AUTH_FRAME_BYTES = 4096
 
 
 def app_token() -> str:
@@ -25,7 +28,11 @@ async def authenticate_socket(socket: WebSocket) -> bool:
         return True
     try:
         async with asyncio.timeout(10):
-            event = await socket.receive_json()
+            message = await socket.receive()
+        raw = message.get('text')
+        if not isinstance(raw, str) or len(raw.encode('utf-8')) > MAX_AUTH_FRAME_BYTES:
+            raise ValueError('Invalid authentication frame')
+        event = json.loads(raw)
         if (isinstance(event, dict) and event.get("type") == "auth"
                 and isinstance(event.get("token"), str)
                 and authorized(f"Bearer {event['token']}")):

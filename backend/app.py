@@ -20,7 +20,7 @@ load_dotenv(BASE_DIR / ".env")
 
 from services import LANGUAGES, check_target, transcribe_audio, translate_text
 from live import live_router
-from auth import app_token, authorized
+from security import APIProtectionMiddleware
 import whatsapp
 import voice_feedback
 import followup
@@ -68,19 +68,9 @@ async def log_whatsapp_webhook(request: Request, call_next):
     return response
 
 
-@app.middleware("http")
-async def protect_api(request: Request, call_next):
-    if request.url.path.startswith('/api/') and request.method != 'OPTIONS':
-        if not app_token():
-            return JSONResponse(status_code=503, content={'success': False, 'error': 'Set APP_ACCESS_TOKEN in the backend .env file.'})
-        if not authorized(request.headers.get('authorization', '')):
-            return JSONResponse(status_code=401, content={'success': False, 'error': 'Enter the correct app access token in Connection settings.'}, headers={'WWW-Authenticate': 'Bearer'})
-    response = await call_next(request)
-    if request.url.path.startswith('/api/'):
-        response.headers['Cache-Control'] = 'no-store'
-    return response
-
-
+app.add_middleware(APIProtectionMiddleware, upload_bytes=MAX_UPLOAD_BYTES)
+# CORS preflight is handled outside authentication. Ordinary OPTIONS requests
+# still require credentials, and preflight never executes an API operation.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[v.strip() for v in os.getenv("ALLOWED_ORIGINS", DEFAULT_ORIGINS).split(",")],
@@ -183,6 +173,39 @@ async def transcribe(file: UploadFile | None = File(default=None), target_langua
         raise
     except Exception:
         raise HTTPException(500, "Processing failed. Please try again.") from None
+    finally:
+        if file is not None:
+            await file.close()
+
+
+@app.post("/api/assistant/transcribe")
+async def transcribe_assistant_audio(file: UploadFile | None = File(default=None)):
+    """Transcribe chat audio in an ephemeral directory, independent of retention settings."""
+    try:
+        if file is None or not file.filename:
+            raise HTTPException(400, "Please record an audio message.")
+        extension = Path(file.filename.replace("\\", "/")).suffix.lower()
+        if extension not in ALLOWED_EXTENSIONS:
+            raise HTTPException(400, "The recorded audio format is not supported.")
+        if file.size is not None and file.size > min(MAX_UPLOAD_BYTES, 10_000_000):
+            raise HTTPException(413, "The recording is too large.")
+        with TemporaryDirectory(prefix="assistant-transcription-") as directory:
+            path = Path(directory) / f"recording{extension}"
+            size = 0
+            with path.open("wb") as output:
+                while chunk := await file.read(64 * 1024):
+                    size += len(chunk)
+                    if size > min(MAX_UPLOAD_BYTES, 10_000_000):
+                        raise HTTPException(413, "The recording is too large.")
+                    output.write(chunk)
+            if not size:
+                raise HTTPException(400, "The recording is empty.")
+            transcript = await transcribe_audio(str(path))
+        return {"success": True, "transcript": transcript}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(500, "Transcription failed. Please try again.") from None
     finally:
         if file is not None:
             await file.close()

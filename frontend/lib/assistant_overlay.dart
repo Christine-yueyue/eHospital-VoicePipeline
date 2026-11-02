@@ -25,6 +25,10 @@ class _AssistantOverlayState extends State<AssistantOverlay> {
   final _scroll = ScrollController();
   final List<_ChatEntry> _entries = [];
   Timer? _poll;
+  Timer? _recordingTimer;
+  bool _recording = false;
+  bool _transcribing = false;
+  int _recordingSeconds = 0;
   bool _open = false;
   bool _sending = false;
   bool _loadingActivity = false;
@@ -55,6 +59,17 @@ class _AssistantOverlayState extends State<AssistantOverlay> {
     'Add a contact': 'Ajouter un contact',
     'Message the assistant…': 'Écrivez à l’assistant…',
     'Send': 'Envoyer',
+    'Cancel recording': 'Annuler l’enregistrement',
+    'Recording': 'Enregistrement',
+    'Stop recording': 'Arrêter l’enregistrement',
+    'Transcribing…': 'Transcription…',
+    'Record voice message': 'Enregistrer un message vocal',
+    'Could not start recording. Check microphone permission.':
+        'Impossible de démarrer l’enregistrement. Vérifiez l’autorisation du microphone.',
+    'No speech was recognized. Please try again.':
+        'Aucune parole reconnue. Veuillez réessayer.',
+    'Transcription failed. Check the connection and try again.':
+        'La transcription a échoué. Vérifiez la connexion et réessayez.',
     'Please wait…': 'Veuillez patienter…',
     'Task': 'Tâche',
     'Recipient': 'Destinataire',
@@ -112,6 +127,17 @@ class _AssistantOverlayState extends State<AssistantOverlay> {
     'Add a contact': 'إضافة جهة اتصال',
     'Message the assistant…': 'أرسل رسالة إلى المساعد…',
     'Send': 'إرسال',
+    'Cancel recording': 'إلغاء التسجيل',
+    'Recording': 'جارٍ التسجيل',
+    'Stop recording': 'إيقاف التسجيل',
+    'Transcribing…': 'جارٍ تحويل الصوت إلى نص…',
+    'Record voice message': 'تسجيل رسالة صوتية',
+    'Could not start recording. Check microphone permission.':
+        'تعذر بدء التسجيل. تحقق من إذن الميكروفون.',
+    'No speech was recognized. Please try again.':
+        'لم يتم التعرف على الكلام. حاول مرة أخرى.',
+    'Transcription failed. Check the connection and try again.':
+        'فشل تحويل الصوت إلى نص. تحقق من الاتصال وحاول مرة أخرى.',
     'Task': 'المهمة',
     'Recipient': 'المستلم',
     'Confirm and send': 'تأكيد وإرسال',
@@ -142,9 +168,73 @@ class _AssistantOverlayState extends State<AssistantOverlay> {
   @override
   void dispose() {
     _poll?.cancel();
+    _recordingTimer?.cancel();
+    if (_recording) unawaited(widget.controller.cancelAssistantRecording());
     _input.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  Future<void> _startChatRecording() async {
+    if (_sending || _recording || _transcribing) return;
+    try {
+      await widget.controller.startAssistantRecording();
+      if (!mounted) return;
+      setState(() {
+        _recording = true;
+        _recordingSeconds = 0;
+      });
+      _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted || !_recording) return timer.cancel();
+        setState(() => _recordingSeconds++);
+        if (_recordingSeconds >= 60) unawaited(_stopChatRecording());
+      });
+    } on FormatException catch (e) {
+      _notice(e.message);
+    } catch (_) {
+      _notice('Could not start recording. Check microphone permission.');
+    }
+  }
+
+  Future<void> _stopChatRecording() async {
+    if (!_recording) return;
+    _recordingTimer?.cancel();
+    setState(() {
+      _recording = false;
+      _transcribing = true;
+    });
+    try {
+      final wav = await widget.controller.stopAssistantRecording();
+      final text = await widget.controller.transcribeAssistantRecording(wav);
+      if (mounted && text.trim().isNotEmpty) {
+        final existing = _input.text.trimRight();
+        _input.text = existing.isEmpty
+            ? text.trim()
+            : '$existing ${text.trim()}';
+        _input.selection = TextSelection.collapsed(offset: _input.text.length);
+      } else if (mounted) {
+        _notice('No speech was recognized. Please try again.');
+      }
+    } on FormatException catch (e) {
+      _notice(e.message);
+    } catch (_) {
+      _notice('Transcription failed. Check the connection and try again.');
+    } finally {
+      if (mounted) setState(() => _transcribing = false);
+    }
+  }
+
+  Future<void> _cancelChatRecording() async {
+    _recordingTimer?.cancel();
+    await widget.controller.cancelAssistantRecording();
+    if (mounted) setState(() => _recording = false);
+  }
+
+  void _notice(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _refreshActivity() async {
@@ -367,6 +457,36 @@ class _AssistantOverlayState extends State<AssistantOverlay> {
     _scrollToEnd();
   }
 
+  Future<void> _recordConsent(Map<String, dynamic> contact) async {
+    if (_sending) return;
+    final decision = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (_) => _ConsentDialog(contact: contact),
+    );
+    if (decision == null || !mounted || _sending) return;
+    setState(() => _sending = true);
+    var message =
+        'Permission saved. Create a fresh follow-up to review its recipient and template.';
+    try {
+      await widget.controller.recordContactConsent(
+        contact['id'] as String,
+        decision['consent']!,
+        decision['source']!,
+      );
+      contact['consent'] = decision['consent'];
+    } on FormatException catch (error) {
+      message = error.message;
+    } catch (_) {
+      message = 'Could not save permission. Refresh and try again.';
+    }
+    if (!mounted) return;
+    setState(() {
+      _sending = false;
+      _entries.add(_ChatEntry(role: 'assistant', text: message));
+    });
+    _scrollToEnd();
+  }
+
   Widget _actionCard(Map<String, dynamic>? action) {
     if (action == null) return const SizedBox.shrink();
     final type = action['type'];
@@ -421,6 +541,11 @@ class _AssistantOverlayState extends State<AssistantOverlay> {
                   : null,
               child: Text(t('Confirm and send')),
             ),
+            if (contact['consent'] != 'granted')
+              TextButton(
+                onPressed: _sending ? null : () => _recordConsent(contact),
+                child: const Text('Record permission'),
+              ),
           ],
         ),
       );
@@ -451,11 +576,20 @@ class _AssistantOverlayState extends State<AssistantOverlay> {
         ),
       );
     }
-    if (type == 'contact_created') {
+    if (type == 'contact_created' || type == 'consent_confirmation') {
       final contact = action['item'] as Map<String, dynamic>;
       return _CardBox(
-        child: Text(
-          '${t('Contact')}: ${contact['name']} · ${t('Permission')}: ${contact['consent']}',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${t('Contact')}: ${contact['name']} · ${t('Permission')}: ${contact['consent']}',
+            ),
+            TextButton(
+              onPressed: _sending ? null : () => _recordConsent(contact),
+              child: const Text('Record permission'),
+            ),
+          ],
         ),
       );
     }
@@ -677,36 +811,80 @@ class _AssistantOverlayState extends State<AssistantOverlay> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _input,
-                        minLines: 1,
-                        maxLines: 4,
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: (_) => _send(),
-                        decoration: InputDecoration(
-                          hintText: t('Message the assistant…'),
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24),
+                    if (_recording) ...[
+                      IconButton(
+                        tooltip: t('Cancel recording'),
+                        onPressed: _cancelChatRecording,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
+                          child: Text(
+                            '${t('Recording')} · 00:${_recordingSeconds.toString().padLeft(2, '0')} / 01:00',
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.filled(
-                      onPressed: _sending ? null : () => _send(),
-                      style: IconButton.styleFrom(
-                        backgroundColor: _green,
-                        foregroundColor: Colors.white,
+                      IconButton.filled(
+                        tooltip: t('Stop recording'),
+                        onPressed: _stopChatRecording,
+                        style: IconButton.styleFrom(
+                          backgroundColor: _green,
+                          foregroundColor: Colors.white,
+                        ),
+                        icon: const Icon(Icons.stop_rounded),
                       ),
-                      tooltip: t('Send'),
-                      icon: const Icon(Icons.arrow_upward_rounded),
-                    ),
+                    ] else ...[
+                      Expanded(
+                        child: TextField(
+                          controller: _input,
+                          minLines: 1,
+                          maxLines: 4,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => _send(),
+                          decoration: InputDecoration(
+                            hintText: t('Message the assistant…'),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: _transcribing
+                            ? t('Transcribing…')
+                            : t('Record voice message'),
+                        onPressed: _sending || _transcribing
+                            ? null
+                            : _startChatRecording,
+                        icon: _transcribing
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.mic_none_rounded),
+                      ),
+                      IconButton.filled(
+                        onPressed: _sending || _transcribing || _recording
+                            ? null
+                            : () => _send(),
+                        style: IconButton.styleFrom(
+                          backgroundColor: _green,
+                          foregroundColor: Colors.white,
+                        ),
+                        tooltip: t('Send'),
+                        icon: const Icon(Icons.arrow_upward_rounded),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -857,6 +1035,82 @@ class _AssistantOverlayState extends State<AssistantOverlay> {
         ],
       );
     },
+  );
+}
+
+class _ConsentDialog extends StatefulWidget {
+  const _ConsentDialog({required this.contact});
+  final Map<String, dynamic> contact;
+
+  @override
+  State<_ConsentDialog> createState() => _ConsentDialogState();
+}
+
+class _ConsentDialogState extends State<_ConsentDialog> {
+  final _source = TextEditingController();
+  String? _decision;
+
+  @override
+  void dispose() {
+    _source.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Record WhatsApp permission'),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('${widget.contact['name']} · ${widget.contact['phone']}'),
+          const SizedBox(height: 12),
+          const Text(
+            'Record the contact’s actual permission. Saving this record does not send a message.',
+          ),
+          DropdownButton<String>(
+            value: _decision,
+            hint: const Text('Choose permission status'),
+            isExpanded: true,
+            items: const [
+              DropdownMenuItem(
+                value: 'granted',
+                child: Text('Agreed to WhatsApp messages'),
+              ),
+              DropdownMenuItem(value: 'revoked', child: Text('Opted out')),
+              DropdownMenuItem(value: 'unknown', child: Text('Unknown')),
+            ],
+            onChanged: (value) => setState(() => _decision = value),
+          ),
+          TextField(
+            controller: _source,
+            maxLength: 240,
+            decoration: const InputDecoration(
+              labelText: 'Permission source (required for agreement)',
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed:
+            _decision == null ||
+                (_decision == 'granted' && _source.text.trim().isEmpty)
+            ? null
+            : () => Navigator.pop(context, {
+                'consent': _decision!,
+                'source': _source.text.trim(),
+              }),
+        child: const Text('Save permission'),
+      ),
+    ],
   );
 }
 

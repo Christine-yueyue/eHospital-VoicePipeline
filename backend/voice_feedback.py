@@ -1,7 +1,10 @@
 """SQLite metadata and backend-local audio storage for voice feedback."""
 
+from __future__ import annotations
+
 import hashlib
 import os
+import re
 import shutil
 import sqlite3
 import uuid
@@ -26,8 +29,10 @@ def utc_now() -> str:
 def initialize() -> None:
     """Create local storage and the voice_feedback schema/indexes idempotently."""
     db_path = database_path()
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    audio_directory().mkdir(parents=True, exist_ok=True)
+    db_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    audio_directory().mkdir(mode=0o700, parents=True, exist_ok=True)
+    db_path.touch(mode=0o600, exist_ok=True)
+    db_path.chmod(0o600)
     with sqlite3.connect(db_path, timeout=10) as db:
         db.execute('''CREATE TABLE IF NOT EXISTS voice_feedback (
             id INTEGER PRIMARY KEY,
@@ -88,7 +93,7 @@ def store_audio(source_path: Path, *, extension: str, mime_type: str | None,
     """
     initialize()
     suffix = extension.lower()
-    if not suffix.startswith('.') or len(suffix) > 12:
+    if not re.fullmatch(r'\.[a-z0-9]{1,10}', suffix):
         suffix = '.audio'
     if source_message_id:
         file_name = f'{hashlib.sha256(source_message_id.encode()).hexdigest()}{suffix}'
@@ -98,7 +103,10 @@ def store_audio(source_path: Path, *, extension: str, mime_type: str | None,
     destination = audio_directory() / file_name
     temporary = audio_directory() / f'.{uuid.uuid4().hex}.upload'
     try:
-        shutil.copyfile(source_path, temporary)
+        # Restrictive permissions apply before any audio bytes are written.
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, 'wb') as output, source_path.open('rb') as input_file:
+            shutil.copyfileobj(input_file, output)
         size_bytes = temporary.stat().st_size
         os.replace(temporary, destination)
     finally:
