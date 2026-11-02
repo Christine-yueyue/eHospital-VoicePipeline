@@ -20,6 +20,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 import inbox
+import followup
 import voice_feedback
 from services import LANGUAGES, transcribe_audio, translate_text
 
@@ -51,6 +52,7 @@ def settings() -> dict:
         invalid.append('WHATSAPP_TARGET_LANGUAGE')
     return {'configured': not missing and not invalid,
             'missing': missing, 'invalid': invalid,
+            'followup_template_configured': bool(os.getenv('WHATSAPP_FOLLOWUP_TEMPLATE_NAME','').strip()),
             'target_language': target, 'retention_hours': 24}
 
 
@@ -111,7 +113,63 @@ def audio_events(payload: dict) -> list[dict]:
                     received_at = None
                 queue_id = message_id or str(uuid.uuid4())
                 events.append({'id': queue_id, 'message_id': message_id, 'media_id': media_id,
+                               'kind': 'audio',
                                'sender': sender or '', 'received_at': received_at})
+    return events
+
+
+def text_events(payload: dict) -> list[dict]:
+    """Extract verified, fresh WhatsApp text replies without logging their content."""
+    events = []
+    allowed = {v.strip() for v in os.getenv('WHATSAPP_ALLOWED_SENDERS', '').split(',') if v.strip()}
+    for entry in payload.get('entry', []):
+        if entry.get('id') != os.getenv('WHATSAPP_WABA_ID'):
+            continue
+        for change in entry.get('changes', []):
+            if change.get('field') != 'messages':
+                continue
+            value = change.get('value', {})
+            if value.get('metadata', {}).get('phone_number_id') != os.getenv('WHATSAPP_PHONE_NUMBER_ID'):
+                continue
+            for message in value.get('messages', []):
+                sender = message.get('from', '')
+                if (message.get('type') != 'text' or not isinstance(sender, str)
+                        or not re.fullmatch(r'[0-9]{7,20}', sender)
+                        or (allowed and sender not in allowed)):
+                    continue
+                message_id = message.get('id')
+                if not isinstance(message_id, str) or not 1 <= len(message_id) <= 512:
+                    continue
+                try:
+                    created = int(message.get('timestamp', time.time()))
+                except (TypeError, ValueError):
+                    continue
+                if time.time() - created > inbox.RETENTION_SECONDS or created > time.time() + 300:
+                    continue
+                body = message.get('text', {}).get('body', '')
+                if not isinstance(body, str) or len(body) > 4000:
+                    continue
+                events.append({'sender': sender, 'message_id': message_id,
+                               'kind': 'text', 'body': body, 'received_at': created})
+    return events
+
+
+def status_events(payload: dict) -> list[dict]:
+    events = []
+    for entry in payload.get('entry', []):
+        if entry.get('id') != os.getenv('WHATSAPP_WABA_ID'):
+            continue
+        for change in entry.get('changes', []):
+            if change.get('field') != 'messages':
+                continue
+            value = change.get('value', {})
+            if value.get('metadata', {}).get('phone_number_id') != os.getenv('WHATSAPP_PHONE_NUMBER_ID'):
+                continue
+            for status in value.get('statuses', []):
+                identifier, state = status.get('id'), status.get('status')
+                if (isinstance(identifier, str) and len(identifier) <= 512
+                        and state in {'sent','delivered','read','failed'}):
+                    events.append((identifier, state))
     return events
 
 
@@ -138,6 +196,18 @@ async def receive(request: Request):
     # The SQLite transaction commits BEFORE acknowledgement. Slow media/model
     # work is handled by the worker, including recovery after a server restart.
     count = inbox.enqueue(events, settings()['target_language'])
+    try:
+        for event in events:
+            followup.record_inbound(event)
+        inbound_text = text_events(payload)
+        for event in inbound_text:
+            followup.receive_webhook_text(event)
+        for provider_id, state in status_events(payload):
+            followup.update_status(provider_id, state)
+    except Exception:
+        # The signed webhook is already durably queued. Meta retries will
+        # reconcile deduplicated inbound IDs without exposing message details.
+        logger.warning('WhatsApp follow-up event could not be reconciled.')
     logger.info('WhatsApp webhook accepted: %d matching audio message(s), %d newly queued.', len(events), count)
     return {'received': True, 'queued': count}
 
@@ -239,8 +309,16 @@ async def process_once() -> bool:
                 voice_feedback.mark_completed(message['audio_path'], transcript)
             translation = await translate_text(transcript, message['target'])
         inbox.finish(message, status='completed', transcript=transcript, translation=translation)
+        if message.get('audio_path') and voice_feedback.get_save_to_database():
+            voice_feedback.mark_completed(message['audio_path'], transcript, translation,
+                                          message['target'])
+        followup.complete_inbound(message.get('message_id'), transcript=transcript,
+                                  translation=translation,
+                                  saved=voice_feedback.get_save_to_database())
         logger.info('WhatsApp message processing completed.')
     except HTTPException as exc:
+        followup.complete_inbound(message.get('message_id'), transcript=transcript,
+            translation='', saved=voice_feedback.get_save_to_database(), status='failed')
         if feedback and feedback.get('audio_path') and not transcript:
             try:
                 voice_feedback.mark_failed(feedback['audio_path'], 'Transcription could not be completed. Check provider settings and retry.')
@@ -249,6 +327,8 @@ async def process_once() -> bool:
         inbox.finish(message, status='partial' if transcript else 'failed', transcript=transcript,
                      error=str(exc.detail), retry=exc.status_code == 429 or exc.status_code >= 500)
     except (httpx.HTTPError, TimeoutError):
+        followup.complete_inbound(message.get('message_id'), transcript=transcript,
+            translation='', saved=voice_feedback.get_save_to_database(), status='failed')
         if feedback and feedback.get('audio_path') and not transcript:
             try:
                 voice_feedback.mark_failed(feedback['audio_path'], 'Transcription could not be completed. Check provider settings and retry.')
@@ -259,6 +339,8 @@ async def process_once() -> bool:
     except Exception:
         # Do not record provider responses, media URLs, tokens or voice content.
         logger.warning('WhatsApp processing failed; private details omitted.')
+        followup.complete_inbound(message.get('message_id'), transcript=transcript,
+            translation='', saved=voice_feedback.get_save_to_database(), status='failed')
         if feedback and feedback.get('audio_path') and not transcript:
             try:
                 voice_feedback.mark_failed(feedback['audio_path'], 'Transcription could not be completed. Check backend settings and retry.')

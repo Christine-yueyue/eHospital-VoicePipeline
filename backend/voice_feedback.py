@@ -141,8 +141,14 @@ def _update(audio_path: str, *, status: str, feedback_message=None, error=None) 
             (feedback_message, status, error, utc_now(), audio_path))
 
 
-def mark_completed(audio_path: str, transcript: str) -> None:
-    _update(audio_path, status='completed', feedback_message=transcript)
+def mark_completed(audio_path: str, transcript: str, translation: str | None = None,
+                   target_language: str | None = None) -> None:
+    initialize()
+    with sqlite3.connect(database_path(), timeout=10) as db:
+        db.execute('''UPDATE voice_feedback SET feedback_message=?, transcription_status='completed',
+            last_error=NULL, translation_message=COALESCE(?, translation_message),
+            target_language=COALESCE(?, target_language), updated_time=? WHERE audio_path=?''',
+            (transcript, translation, target_language, utc_now(), audio_path))
 
 
 def mark_failed(audio_path: str, summary: str) -> None:

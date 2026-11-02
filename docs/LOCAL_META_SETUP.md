@@ -49,8 +49,10 @@ python ../scripts/init_env.py
 | `WHATSAPP_APP_SECRET` | Meta App Settings → Basic | Verify signed POST webhook requests |
 | `WHATSAPP_GRAPH_VERSION` | A supported Graph API version shown in Meta (format `vNN.N`) | Meta media requests |
 | `WHATSAPP_ALLOWED_SENDERS` | Your test sender's country code and number, digits only | Optional inbound allowlist |
+| `WHATSAPP_FOLLOWUP_TEMPLATE_NAME` | Exact name of your approved Meta message template | Confirmed outbound invitations in the floating WhatsApp assistant |
+| `ASSISTANT_MODEL` | Defaults to `gpt-4.1-mini` | Understands assistant requests; uses the same server-side OpenAI key |
 
-For the first local app connection, set `OPENAI_API_KEY`; the WhatsApp fields can be filled later. `TRANSCRIPTION_MODEL` and `TRANSLATION_MODEL` have defaults in `.env.example`. Check that the selected models are available to your OpenAI project. If the web frontend uses a different origin than the default local port 5174, add that exact origin to `ALLOWED_ORIGINS` in `.env`.
+For the first local app connection, set `OPENAI_API_KEY`; the WhatsApp fields can be filled later. `TRANSCRIPTION_MODEL`, `TRANSLATION_MODEL`, and `ASSISTANT_MODEL` have defaults in `.env.example`. Check that the selected models are available to your OpenAI project. If the web frontend uses a different origin than the default local port 5174, add that exact origin to `ALLOWED_ORIGINS` in `.env`.
 
 Start FastAPI **from `backend/`**:
 
@@ -70,6 +72,8 @@ In another terminal, `curl -fsS http://127.0.0.1:8003/health` should return a JS
 4. Set `WHATSAPP_GRAPH_VERSION` to a version supported by the Meta API Setup/Graph API you are using (for example, the `vNN.N` format), and set `WHATSAPP_ALLOWED_SENDERS` to your personal test sender's full country code plus digits, without `+`, spaces, or dashes. This allowlist is optional, but if set, a mismatch causes a signed audio event to be acknowledged without entering the inbox. `WHATSAPP_TARGET_LANGUAGE` defaults to `fr` and also accepts `en`.
 5. In Meta's Webhooks configuration, select the **`whatsapp_business_account`** object and subscribe to the **`messages`** field. Separately, confirm that this app is subscribed to the intended WABA. With a token authorized for the account, Meta's Graph API Explorer can inspect `GET /<WABA_ID>/subscribed_apps` and `GET /<WABA_ID>/phone_numbers`; the latter should contain your configured phone-number ID. Check for any WABA-level callback override. Callback verification alone establishes neither subscription.
 6. Follow the Development/Live, app-role, test-number, and authorized-recipient rules shown in the current Meta dashboard. These restrictions depend on the account and app; a successful outbound template send or synthetic dashboard test does not prove real inbound delivery.
+
+To enable outbound follow-ups from the floating assistant, put the approved template name in `WHATSAPP_FOLLOWUP_TEMPLATE_NAME` and configure `WHATSAPP_PHONE_NUMBER_ID` and `WHATSAPP_WABA_ID` from the same Meta account. The selected contact language needs an approved translation in that account. The body may be static or contain one body placeholder (`{{1}}`) for the contact's first name. The assistant verifies the phone's WABA membership, template approval, language, and supported components before showing the actual approved copy in the draft. It sends no message until the operator reviews that preview and confirms. Check that the intended recipient is authorized and, if `WHATSAPP_ALLOWED_SENDERS` is set, listed there too.
 
 Meta's UI labels can change. The important identities are the app whose secret signs the webhook, the WABA to which that app is subscribed, and the phone-number ID from the incoming event. They must correspond to the `.env` values.
 

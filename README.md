@@ -4,6 +4,8 @@ v3 is a separate copy of the v2 Flutter + FastAPI app. It keeps file upload, Eng
 
 The app never contains OpenAI or Meta credentials. The iOS app only receives the separate `APP_ACCESS_TOKEN` used to access this backend.
 
+v3.3 adds a global WhatsApp assistant from a floating chat button in the lower right on existing screens. The assistant can find/create contacts, prepare and send a confirmed follow-up invitation, and show incoming replies in the conversation. Outbound sending requires a Meta-approved `WHATSAPP_FOLLOWUP_TEMPLATE_NAME` with English and French variants configured in the WABA. The app will not send until a contact's permission is recorded and the operator confirms the invitation.
+
 For a complete, copyable setup on a fresh machine—including the local app, Meta account, WABA subscription, and public webhook—follow the [local and Meta setup guide](docs/LOCAL_META_SETUP.md). The steps below are a shorter reference for an existing checkout.
 
 ## Requirements
@@ -129,10 +131,14 @@ WHATSAPP_APP_SECRET
 WHATSAPP_VERIFY_TOKEN
 WHATSAPP_GRAPH_VERSION
 WHATSAPP_TARGET_LANGUAGE
+WHATSAPP_FOLLOWUP_TEMPLATE_NAME
 WHATSAPP_ALLOWED_SENDERS
+ASSISTANT_MODEL
 ```
 
 `WHATSAPP_GRAPH_VERSION` must use the version shown in Meta API Setup (for example, the `vNN.N` format). `WHATSAPP_TARGET_LANGUAGE` defaults to `fr`. Set `WHATSAPP_ALLOWED_SENDERS` to the personal/test sender number as country code plus digits, without `+`, spaces, or hyphens. This allowlist is optional in code, but leaving it empty accepts any sender whose message arrives for the configured WABA and phone number. Keep `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`, and `WHATSAPP_VERIFY_TOKEN` private. The verify token in Meta must exactly match the value in `backend/.env`.
+
+The v3.3 assistant also requires `ASSISTANT_MODEL` (defaults to `gpt-4.1-mini`) and an approved WhatsApp template in `WHATSAPP_FOLLOWUP_TEMPLATE_NAME`. The sending phone, WABA ID, and approved template must all belong to the same Meta account. The assistant checks the exact language and approved template, supports a static text body or a single `{{1}}` contact-name parameter, and previews the approved text before asking for confirmation. The contact's permission and optional sender allowlist must also permit sending.
 
 Expose the webhook through a public HTTPS endpoint and set Meta's callback URL to `https://<public-host>/webhooks/whatsapp`. This repository does not include a tunnel or reverse-proxy configuration. Forward the webhook to `http://127.0.0.1:8003/webhooks/whatsapp`. A Cloudflare Quick Tunnel forwards the whole local backend and is intended here only for development; restrict public routes when setting up a lasting deployment. Subscribe the WhatsApp Business Account to the `messages` webhook field. Meta calls `GET /webhooks/whatsapp` with `hub.mode`, `hub.verify_token`, and `hub.challenge`; the backend validates the token and returns the challenge. Incoming `POST` events must carry a valid `X-Hub-Signature-256`, checked with the app secret before any payload is parsed or queued.
 
@@ -140,7 +146,7 @@ Callback verification, the `messages` field subscription, and subscribing the ap
 
 Check the app's Development/Live or publication status and the test-number restrictions shown in your current Meta dashboard, including authorized test recipients and any required app roles or permissions. Local configuration cannot establish whether Meta permits delivery for this app/sender; do not infer a universal publication requirement from a missing terminal log. A successful test-template send tests outbound sending; a successful dashboard test or GET callback verification does not prove real inbound message delivery.
 
-The handler accepts audio messages only after checking the WABA ID, `metadata.phone_number_id`, message type, sender allowlist, and message age. It queues the media ID and acknowledges quickly. `queued: 0` can mean the event did not match those filters or the message was already queued. A worker retrieves the media URL with the bearer token, downloads only trusted HTTPS Meta media hosts, verifies the advertised hash, transcribes the temporary file, and translates it. Meta's collection documents the media-ID to URL lookup, short-lived URL, bearer token, and supported audio types: [Meta Cloud API media reference](https://www.postman.com/meta/whatsapp-business-platform/request/fpj02x0/retrieve-media-url) and [media collection](https://www.postman.com/meta/whatsapp-business-platform/folder/13382743-ecb27be5-4d27-4763-bbee-6a8002c04bf3).
+The handler accepts audio messages after checking the WABA ID, `metadata.phone_number_id`, message type, sender allowlist, and message age. It queues the media ID and acknowledges quickly. Signed text replies and Meta delivery/read receipts are also linked to known contacts in the assistant. `queued: 0` can mean there was no audio, an audio event did not match the filters, or it was already queued. A worker retrieves the media URL with the bearer token, downloads only trusted HTTPS Meta media hosts, verifies the advertised hash, transcribes the temporary file, and translates it. Meta's collection documents the media-ID to URL lookup, short-lived URL, bearer token, and supported audio types: [Meta Cloud API media reference](https://www.postman.com/meta/whatsapp-business-platform/request/fpj02x0/retrieve-media-url) and [media collection](https://www.postman.com/meta/whatsapp-business-platform/folder/13382743-ecb27be5-4d27-4763-bbee-6a8002c04bf3).
 
 For a privacy-safe local run, keep Uvicorn access logging disabled: Meta's GET verification request includes the verify token in its query string. At Uvicorn's default INFO level, the dedicated `uvicorn.error.whatsapp` logger records POST arrival, signature verification, HTTP response status, matching-audio/queued counts, and worker processing stages. It does not record request URLs, bodies, headers, message content, sender numbers, media IDs, or credentials. After updating the code, manually restart the backend to load these diagnostics if auto-reload is disabled.
 

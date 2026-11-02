@@ -162,7 +162,7 @@ class VoiceController extends ChangeNotifier {
           .timeout(const Duration(seconds: 10));
       final body = _responseBody(response);
       if (_disposed) return false;
-      if (body['version'] != '3.0.0') {
+      if (!{'3.0.0', '3.3.0'}.contains(body['version'])) {
         throw const FormatException(
           'Connect to the v3 backend. This server uses another version.',
         );
@@ -221,6 +221,45 @@ class VoiceController extends ChangeNotifier {
           .timeout(const Duration(seconds: 15)),
     );
   }
+
+  Future<Map<String, dynamic>> assistantMessage(
+    String message,
+    List<Map<String, String>> history,
+  ) async => _responseBody(
+    await _http
+        .post(
+          _url('/api/whatsapp/assistant/message'),
+          headers: {..._headers, 'Content-Type': 'application/json'},
+          body: jsonEncode({'message': message, 'history': history}),
+        )
+        .timeout(const Duration(seconds: 60)),
+  );
+
+  Future<Map<String, dynamic>> assistantActivity() async => _responseBody(
+    await _http
+        .get(_url('/api/whatsapp/assistant/activity'), headers: _headers)
+        .timeout(const Duration(seconds: 15)),
+  );
+
+  Future<void> sendFollowup(String taskId) async => _responseBody(
+    await _http
+        .post(
+          _url('/api/whatsapp/followups/send'),
+          headers: {..._headers, 'Content-Type': 'application/json'},
+          body: jsonEncode({'task_id': taskId}),
+        )
+        .timeout(const Duration(seconds: 45)),
+  );
+
+  Future<void> completeFollowup(String taskId) async => _responseBody(
+    await _http
+        .post(
+          _url('/api/whatsapp/followups/complete'),
+          headers: {..._headers, 'Content-Type': 'application/json'},
+          body: jsonEncode({'id': taskId}),
+        )
+        .timeout(const Duration(seconds: 15)),
+  );
 
   void disconnect() {
     if (busy) return;
