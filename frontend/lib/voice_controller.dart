@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:record/record.dart';
@@ -110,6 +111,41 @@ class VoiceController extends ChangeNotifier {
   Uri _url(String path) => Uri.parse(baseUrl).resolve(path);
 
   Map<String, String> get _headers => {'Authorization': 'Bearer $_accessToken'};
+
+  Future<Map<String, String>> _clientMetadata() async {
+    final metadata = <String, String>{
+      'client_platform': kIsWeb
+          ? 'web'
+          : defaultTargetPlatform.name.toLowerCase(),
+      'client_app_version': '3.0.0+1',
+    };
+    final deviceInfo = DeviceInfoPlugin();
+    if (kIsWeb) {
+      final info = await deviceInfo.webBrowserInfo;
+      metadata['client_os_version'] = info.platform ?? '';
+      return metadata;
+    }
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.iOS:
+        final info = await deviceInfo.iosInfo;
+        metadata['client_os_version'] = info.systemVersion;
+        metadata['client_device_model'] = info.model;
+        metadata['client_is_simulator'] = (!info.isPhysicalDevice).toString();
+      case TargetPlatform.android:
+        final info = await deviceInfo.androidInfo;
+        metadata['client_os_version'] = info.version.release;
+        metadata['client_device_model'] = '${info.manufacturer} ${info.model}'
+            .trim();
+        metadata['client_is_simulator'] = (!info.isPhysicalDevice).toString();
+      case TargetPlatform.macOS:
+        final info = await deviceInfo.macOsInfo;
+        metadata['client_os_version'] = info.osRelease;
+        metadata['client_device_model'] = info.model;
+      default:
+        break;
+    }
+    return metadata..removeWhere((key, value) => value.isEmpty);
+  }
 
   static String? validateAddress(String address) {
     final uri = Uri.tryParse(address.trim());
@@ -348,10 +384,7 @@ class VoiceController extends ChangeNotifier {
   Future<List<Map<String, dynamic>>> approvedScheduleTemplates() async {
     final body = _responseBody(
       await _http
-          .get(
-            _url('/api/whatsapp/schedules/templates'),
-            headers: _headers,
-          )
+          .get(_url('/api/whatsapp/schedules/templates'), headers: _headers)
           .timeout(const Duration(seconds: 20)),
     );
     return (body['templates'] as List).cast<Map<String, dynamic>>();
@@ -507,6 +540,7 @@ class VoiceController extends ChangeNotifier {
         ..files.add(
           http.MultipartFile.fromBytes('file', _fileBytes!, filename: filename),
         );
+      request.fields.addAll(await _clientMetadata());
       final response = await _http
           .send(request)
           .then(http.Response.fromStream)
@@ -554,7 +588,10 @@ class VoiceController extends ChangeNotifier {
       if (_disposed || current != _session) return;
       final uri = _url('/api/live').replace(
         scheme: Uri.parse(baseUrl).scheme == 'https' ? 'wss' : 'ws',
-        queryParameters: {'target_language': targetLanguage},
+        queryParameters: {
+          'target_language': targetLanguage,
+          ...await _clientMetadata(),
+        },
       );
       final channel = WebSocketChannel.connect(uri);
       _channel = channel;

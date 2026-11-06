@@ -58,6 +58,16 @@ def initialize() -> None:
             db.execute('ALTER TABLE voice_feedback ADD COLUMN translation_message TEXT')
         if 'target_language' not in columns:
             db.execute('ALTER TABLE voice_feedback ADD COLUMN target_language TEXT')
+        if 'client_platform' not in columns:
+            db.execute('ALTER TABLE voice_feedback ADD COLUMN client_platform TEXT')
+        if 'client_os_version' not in columns:
+            db.execute('ALTER TABLE voice_feedback ADD COLUMN client_os_version TEXT')
+        if 'client_app_version' not in columns:
+            db.execute('ALTER TABLE voice_feedback ADD COLUMN client_app_version TEXT')
+        if 'client_device_model' not in columns:
+            db.execute('ALTER TABLE voice_feedback ADD COLUMN client_device_model TEXT')
+        if 'client_is_simulator' not in columns:
+            db.execute('ALTER TABLE voice_feedback ADD COLUMN client_is_simulator INTEGER')
         db.execute('''CREATE TABLE IF NOT EXISTS app_settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
@@ -85,7 +95,11 @@ def _created_time(value=None) -> str:
 
 def store_audio(source_path: Path, *, extension: str, mime_type: str | None,
                 source_message_id: str | None = None, created_time=None,
-                source: str = 'upload') -> dict:
+                source: str = 'upload', client_platform: str | None = None,
+                client_os_version: str | None = None,
+                client_app_version: str | None = None,
+                client_device_model: str | None = None,
+                client_is_simulator: bool | None = None) -> dict:
     """Copy original bytes to a generated local filename and create a pending row.
 
     WhatsApp retries use the same hashed filename and source-message row. Manual
@@ -126,16 +140,25 @@ def store_audio(source_path: Path, *, extension: str, mime_type: str | None,
             record_id = row['id']
             db.execute('''UPDATE voice_feedback SET source='whatsapp', audio_path=?, audio_mime_type=?,
                 audio_duration_seconds=NULL, file_name=?, size_bytes=?,
+                client_platform=?, client_os_version=?, client_app_version=?,
+                client_device_model=?, client_is_simulator=?,
                 transcription_status='pending', last_error=NULL, updated_time=?
-                WHERE id=?''', (relative_path, mime_type, file_name, size_bytes, now, record_id))
+                WHERE id=?''', (relative_path, mime_type, file_name, size_bytes,
+                                 client_platform, client_os_version, client_app_version,
+                                 client_device_model, client_is_simulator,
+                                 now, record_id))
         else:
             cursor = db.execute('''INSERT INTO voice_feedback
                 (record_id, feedback_message, created_time, transcription_status,
                  audio_path, audio_mime_type, audio_duration_seconds,
-                 source_message_id, file_name, size_bytes, last_error, updated_time, source)
-                VALUES (NULL, NULL, ?, 'pending', ?, ?, NULL, ?, ?, ?, NULL, ?, ?)''',
+                 source_message_id, file_name, size_bytes, last_error, updated_time, source,
+                 client_platform, client_os_version, client_app_version,
+                 client_device_model, client_is_simulator)
+                VALUES (NULL, NULL, ?, 'pending', ?, ?, NULL, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)''',
                 (created, relative_path, mime_type, source_message_id, file_name, size_bytes, now,
-                 source))
+                 source, client_platform, client_os_version, client_app_version,
+                 client_device_model, None if client_is_simulator is None
+                 else int(client_is_simulator)))
             record_id = cursor.lastrowid
     return {'id': record_id, 'audio_path': relative_path, 'file_name': file_name,
             'size_bytes': size_bytes, 'audio_mime_type': mime_type}
@@ -178,7 +201,12 @@ def set_save_to_database(enabled: bool) -> bool:
     return enabled
 
 
-def save_live_feedback(transcript: str, translation: str, target_language: str) -> int | None:
+def save_live_feedback(transcript: str, translation: str, target_language: str,
+                       client_platform: str | None = None,
+                       client_os_version: str | None = None,
+                       client_app_version: str | None = None,
+                       client_device_model: str | None = None,
+                       client_is_simulator: bool | None = None) -> int | None:
     """Save completed live text only while the global persistence setting is on."""
     if not get_save_to_database():
         return None
@@ -188,7 +216,12 @@ def save_live_feedback(transcript: str, translation: str, target_language: str) 
         cursor = db.execute('''INSERT INTO voice_feedback
             (record_id, feedback_message, created_time, transcription_status, audio_path,
              audio_mime_type, audio_duration_seconds, source_message_id, file_name,
-             size_bytes, last_error, updated_time, source, translation_message, target_language)
-            VALUES (NULL, ?, ?, 'completed', '', NULL, NULL, NULL, '', 0, NULL, ?, 'live', ?, ?)''',
-            (transcript, now, now, translation, target_language))
+             size_bytes, last_error, updated_time, source, translation_message, target_language,
+             client_platform, client_os_version, client_app_version,
+             client_device_model, client_is_simulator)
+            VALUES (NULL, ?, ?, 'completed', '', NULL, NULL, NULL, '', 0, NULL, ?, 'live', ?, ?,
+                    ?, ?, ?, ?, ?)''',
+            (transcript, now, now, translation, target_language, client_platform,
+             client_os_version, client_app_version, client_device_model,
+             None if client_is_simulator is None else int(client_is_simulator)))
         return cursor.lastrowid

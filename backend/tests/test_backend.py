@@ -45,7 +45,10 @@ def test_upload_returns_both_languages_and_persists_file_and_record(client, monk
     translate = AsyncMock(return_value="J’ai besoin d’un rendez-vous vendredi.")
     monkeypatch.setattr(backend, "transcribe_audio", transcribe)
     monkeypatch.setattr(backend, "translate_text", translate)
-    response = client.post("/api/transcribe", files={"file": ("../../note.ogg", b"sample")}, data={"target_language": "fr"})
+    response = client.post("/api/transcribe", files={"file": ("../../note.ogg", b"sample")},
+                           data={"target_language": "fr", "client_platform": "ios",
+                                 "client_os_version": "iOS 27.0",
+                                 "client_app_version": "3.0.0+1"})
     assert response.status_code == 200
     assert response.json()["filename"] == "note.ogg"
     assert response.json()["translation"] == "J’ai besoin d’un rendez-vous vendredi."
@@ -53,9 +56,10 @@ def test_upload_returns_both_languages_and_persists_file_and_record(client, monk
     assert paths[0].read_bytes() == b"sample"
     with sqlite3.connect(voice_feedback.database_path()) as db:
         row = db.execute('''SELECT feedback_message, transcription_status, audio_path,
-            audio_mime_type, size_bytes, source FROM voice_feedback''').fetchone()
+            audio_mime_type, size_bytes, source, client_platform, client_os_version,
+            client_app_version FROM voice_feedback''').fetchone()
     assert row[0:2] == ('I need an appointment on Friday.', 'completed')
-    assert row[3:] == ('audio/ogg', 6, 'upload')
+    assert row[3:] == ('audio/ogg', 6, 'upload', 'ios', 'iOS 27.0', '3.0.0+1')
     assert (voice_feedback.audio_directory() / Path(row[2]).name).resolve() == paths[0].resolve()
     translate.assert_awaited_once_with("I need an appointment on Friday.", "fr")
 
@@ -137,10 +141,14 @@ def test_global_persistence_setting_controls_upload_and_live_records(client, mon
         assert db.execute('SELECT COUNT(*) FROM voice_feedback').fetchone()[0] == 0
     assert voice_feedback.save_live_feedback('live words', 'mots en direct', 'fr') is None
     client.post('/api/settings/save-to-database', json={'enabled': True})
-    assert voice_feedback.save_live_feedback('live words', 'mots en direct', 'fr') == 1
+    assert voice_feedback.save_live_feedback('live words', 'mots en direct', 'fr',
+                                             'ios', 'iOS 27.0', '3.0.0+1') == 1
     with sqlite3.connect(voice_feedback.database_path()) as db:
-        row = db.execute('SELECT source, feedback_message, translation_message, target_language, transcription_status FROM voice_feedback').fetchone()
-    assert row == ('live', 'live words', 'mots en direct', 'fr', 'completed')
+        row = db.execute('''SELECT source, feedback_message, translation_message, target_language,
+            transcription_status, client_platform, client_os_version, client_app_version
+            FROM voice_feedback''').fetchone()
+    assert row == ('live', 'live words', 'mots en direct', 'fr', 'completed',
+                   'ios', 'iOS 27.0', '3.0.0+1')
 
 
 def test_missing_key(client, monkeypatch):

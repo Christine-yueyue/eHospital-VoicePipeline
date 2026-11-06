@@ -27,6 +27,7 @@ import followup
 import scheduled_messages
 
 ALLOWED_EXTENSIONS = {".ogg", ".opus", ".mp3", ".wav", ".m4a", ".webm"}
+CLIENT_METADATA_MAX_LENGTH = 100
 try:
     MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "20"))
     if not 1 <= MAX_UPLOAD_MB <= 25:
@@ -130,10 +131,29 @@ async def health():
     return {'status': 'ok', 'version': '3.3.0'}
 
 
+def client_metadata(value: str | None) -> str | None:
+    value = (value or '').strip()
+    if not value:
+        return None
+    if len(value) > CLIENT_METADATA_MAX_LENGTH:
+        raise HTTPException(400, "Client metadata is too long.")
+    return value
+
+
 @app.post("/api/transcribe")
-async def transcribe(file: UploadFile | None = File(default=None), target_language: str = Form("")):
+async def transcribe(file: UploadFile | None = File(default=None), target_language: str = Form(""),
+                     client_platform: str = Form(""), client_os_version: str = Form(""),
+                     client_app_version: str = Form(""), client_device_model: str = Form(""),
+                     client_is_simulator: str = Form("")):
     """Transcribe an upload, persisting it only when the global setting is enabled."""
     try:
+        client_platform = client_metadata(client_platform)
+        client_os_version = client_metadata(client_os_version)
+        client_app_version = client_metadata(client_app_version)
+        client_device_model = client_metadata(client_device_model)
+        if client_is_simulator not in {"", "true", "false"}:
+            raise HTTPException(400, "Invalid simulator metadata.")
+        is_simulator = client_is_simulator == "true" if client_is_simulator else None
         if target_language:
             check_target(target_language)
         if file is None or not file.filename:
@@ -160,7 +180,11 @@ async def transcribe(file: UploadFile | None = File(default=None), target_langua
                 '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.webm': 'audio/webm',
             }[extension]
             save_enabled = voice_feedback.get_save_to_database()
-            record = voice_feedback.store_audio(path, extension=extension, mime_type=mime_type) if save_enabled else None
+            record = voice_feedback.store_audio(
+                path, extension=extension, mime_type=mime_type,
+                client_platform=client_platform, client_os_version=client_os_version,
+                client_app_version=client_app_version, client_device_model=client_device_model,
+                client_is_simulator=is_simulator) if save_enabled else None
             try:
                 transcript = await transcribe_audio(
                     str(voice_feedback.audio_directory() / record['file_name']) if record else str(path))
