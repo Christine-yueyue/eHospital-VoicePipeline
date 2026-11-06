@@ -1,255 +1,255 @@
-# Voice Notes：交给 AI 执行的负载测试工作流
+# Voice Notes: AI-Executed Load Testing Workflow
 
-这份文件提供分阶段的任务 prompt，不是已经完成的设计或测试报告。当前只编写工作流；没有实施测试代码、启动系统或运行压测。
+This file provides phased task prompts. It is not a completed design or test report. Only the workflow is defined here; no test code has been implemented, the system has not been started, and no load test has been run.
 
-项目目录：`/Users/christine/Documents/ChatGPT/voice-text-project`
+Project directory: `/Users/christine/Documents/ChatGPT/voice-text-project`
 
-按软件开发流程分为七个阶段。阶段 01～04 只做设计；阶段 05～07 留待以后实施。每次只向 AI 发出一个阶段的指令，AI 完成该阶段后停止，不自动进入下一阶段。
+The software development process is divided into seven phases. Phases 01-04 are design-only; phases 05-07 are reserved for later implementation. Send only one phase instruction to the AI at a time. After completing that phase, the AI must stop and must not enter the next phase automatically.
 
-| 阶段 | 对应活动 | 主要产物 | 本阶段允许执行 |
+| Phase | Activity | Primary artifacts | Allowed execution in this phase |
 | --- | --- | --- | --- |
-| 01 | 需求分析 | 测试需求与范围 | 阅读代码、编写文档 |
-| 02 | 系统与测试架构设计 | 隔离方案、负载模型、观测方案 | 阅读代码、编写文档 |
-| 03 | QA 测试设计 | 测试用例、测试数据、追踪矩阵 | 阅读代码、编写文档 |
-| 04 | 实施计划与设计评审 | 任务拆解、完成定义、执行约定 | 阅读代码、编写文档 |
-| 05 | 实现与本地验证 | 测试工具、运行说明、验证记录 | 编写代码并运行小规模隔离验证 |
-| 06 | 测试执行 | 原始结果、环境清单、实验记录 | 运行已设计的隔离测试 |
-| 07 | 分析与质量评审 | 测试报告、缺陷报告、回归计划 | 分析结果、编写文档 |
+| 01 | Requirements analysis | Test requirements and scope | Read code, write documentation |
+| 02 | System and test architecture design | Isolation plan, load model, observability plan | Read code, write documentation |
+| 03 | QA test design | Test cases, test data, traceability matrix | Read code, write documentation |
+| 04 | Implementation plan and design review | Task breakdown, definition of done, execution agreement | Read code, write documentation |
+| 05 | Implementation and local validation | Test tools, run instructions, validation record | Write code and run small isolated validation |
+| 06 | Test execution | Raw results, environment inventory, experiment records | Run the designed isolated tests |
+| 07 | Analysis and quality review | Test report, defect report, regression plan | Analyze results, write documentation |
 
-## 使用方法
+## How to use this file
 
-在能访问项目文件的 AI 编程工具中，复制下列某一条。它们是发给 AI 的任务指令，无需在终端执行。
+In an AI coding tool that can access the project files, copy one of the following prompts. These are instructions for the AI and do not need to be executed in a terminal.
 
 ```text
-读取 /Users/christine/Documents/ChatGPT/voice-text-project/docs/LOAD_TEST_AI_WORKFLOW.md，遵守其中的“所有阶段共同规则”，只执行阶段 01 的完整 prompt。完成产物和自查后停止。
+Read /Users/christine/Documents/ChatGPT/voice-text-project/docs/LOAD_TEST_AI_WORKFLOW.md, follow its "Rules shared by all phases", and execute only the complete prompt for Phase 01. Complete the artifacts and self-check, then stop.
 ```
 
 ```text
-读取 /Users/christine/Documents/ChatGPT/voice-text-project/docs/LOAD_TEST_AI_WORKFLOW.md，遵守其中的“所有阶段共同规则”，只执行阶段 02 的完整 prompt。完成产物和自查后停止。
+Read /Users/christine/Documents/ChatGPT/voice-text-project/docs/LOAD_TEST_AI_WORKFLOW.md, follow its "Rules shared by all phases", and execute only the complete prompt for Phase 02. Complete the artifacts and self-check, then stop.
 ```
 
 ```text
-读取 /Users/christine/Documents/ChatGPT/voice-text-project/docs/LOAD_TEST_AI_WORKFLOW.md，遵守其中的“所有阶段共同规则”，只执行阶段 03 的完整 prompt。完成产物和自查后停止。
+Read /Users/christine/Documents/ChatGPT/voice-text-project/docs/LOAD_TEST_AI_WORKFLOW.md, follow its "Rules shared by all phases", and execute only the complete prompt for Phase 03. Complete the artifacts and self-check, then stop.
 ```
 
 ```text
-读取 /Users/christine/Documents/ChatGPT/voice-text-project/docs/LOAD_TEST_AI_WORKFLOW.md，遵守其中的“所有阶段共同规则”，只执行阶段 04 的完整 prompt。完成产物和自查后停止。
+Read /Users/christine/Documents/ChatGPT/voice-text-project/docs/LOAD_TEST_AI_WORKFLOW.md, follow its "Rules shared by all phases", and execute only the complete prompt for Phase 04. Complete the artifacts and self-check, then stop.
 ```
 
-以下三条留到设计完成后使用；本文件的创建不授权现在执行它们。
+Use the following three prompts only after the design is complete; creating this file does not authorize them now.
 
 ```text
-读取 /Users/christine/Documents/ChatGPT/voice-text-project/docs/LOAD_TEST_AI_WORKFLOW.md，遵守其中的“所有阶段共同规则”，只执行阶段 05 的完整 prompt。本次授权按照阶段 01～04 的设计实现测试代码，并完成规定的小规模隔离验证；完成后停止。
-```
-
-```text
-读取 /Users/christine/Documents/ChatGPT/voice-text-project/docs/LOAD_TEST_AI_WORKFLOW.md，遵守其中的“所有阶段共同规则”，只执行阶段 06 的完整 prompt。本次授权在隔离测试环境执行已定义的测试，不调用真实外部服务或发送真实消息；完成后停止。
+Read /Users/christine/Documents/ChatGPT/voice-text-project/docs/LOAD_TEST_AI_WORKFLOW.md, follow its "Rules shared by all phases", and execute only the complete prompt for Phase 05. This run authorizes implementation of the test code according to the Phase 01-04 design and the required small isolated validation; complete it, then stop.
 ```
 
 ```text
-读取 /Users/christine/Documents/ChatGPT/voice-text-project/docs/LOAD_TEST_AI_WORKFLOW.md，遵守其中的“所有阶段共同规则”，只执行阶段 07 的完整 prompt。分析已有测试证据并生成报告，不自动修复问题或重新压测；完成后停止。
+Read /Users/christine/Documents/ChatGPT/voice-text-project/docs/LOAD_TEST_AI_WORKFLOW.md, follow its "Rules shared by all phases", and execute only the complete prompt for Phase 06. This run authorizes execution of the defined tests in an isolated test environment; do not call real external services or send real messages; complete it, then stop.
 ```
 
-## 所有阶段共同规则
+```text
+Read /Users/christine/Documents/ChatGPT/voice-text-project/docs/LOAD_TEST_AI_WORKFLOW.md, follow its "Rules shared by all phases", and execute only the complete prompt for Phase 07. Analyze the existing test evidence and generate reports; do not fix issues automatically or rerun load tests; complete it, then stop.
+```
 
-1. 使用中文写作，保留必要的英文 QA 术语，并在首次出现时解释。你在当前阶段承担指定角色，无需创建其他聊天或子代理。
-2. 先读取适用的 AGENTS.md、README 和本阶段涉及的代码。以当前实现为准，不把历史设计文档中的目标功能当作已经实现。
-3. 前序对话仅作为背景。分别标记“已验证事实”“设计假设”“建议目标”“实测结果”，事实附文件路径与行号。不能编造结果、命令执行记录、容量或工具能力。
-4. 阶段 01～04 只可创建或更新设计文档，不修改应用代码、安装依赖、启动服务、运行测试或调用外部 API。阶段 05～07 的权限以各阶段 prompt 为准。
-5. 不读取或输出 .env、真实密钥、现有业务数据库和真实用户音频。不向真实 WhatsApp 联系人发送消息。不要让测试进程自动载入真实配置。
-6. 阶段 05～06 的测试默认使用独立数据库、音频目录、测试凭据和模拟外部服务。保留真实的鉴权、签名校验、队列、存储、状态转换与转码路径；不得通过跳过这些步骤制造好看的结果。
-7. 不覆盖用户未提交的修改，不擅自提交、推送、发布或调整线上环境。遇到访问限制，使用工具规定的权限流程，不尝试绕过。
-8. 只执行指定阶段。后续阶段需要的工作写入计划，不顺便实现。阶段完成后说明产物、关键决定、待解决事项以及该阶段是否完成。
-9. 有不影响本阶段推进的信息缺口时，先采用明确标注、可修改的合理假设。遇到决定测试对象或正确性判定的关键缺口时，完成不受影响的部分，再提出必要问题。
-10. 运行某阶段前检查前序产物是否存在且足够使用。不能假装缺失的输入已经完成，也不能为补齐输入擅自跨阶段执行。
-11. 已有同名产物应先阅读再更新，保留人工决定。需求使用 REQ 编号，用例使用 LT 编号，实施任务使用 TASK 编号，缺陷使用 BUG 编号，使它们可以相互追踪。
-12. 每阶段结束给出简短自查：本阶段做了什么、没有证据的事项、进入下一阶段所需输入。无需为了例行文档编辑反复询问许可。
+## Rules shared by all phases
 
-## 已知背景：后续执行时必须重新核对
+1. Write in English, retaining necessary English QA terminology and explaining each term on first use. Act in the role specified for the current phase; do not create other chats or subagents.
+2. First read any applicable `AGENTS.md`, `README`, and code involved in the phase. Use the current implementation as the source of truth; do not treat target functionality in historical design documents as implemented.
+3. Treat prior conversation only as background. Label items separately as "verified facts", "design assumptions", "suggested targets", and "measured results". Cite facts with file paths and line numbers. Do not invent results, command execution records, capacity, or tool capabilities.
+4. Phases 01-04 may create or update design documents only. Do not modify application code, install dependencies, start services, run tests, or call external APIs. Permissions for phases 05-07 are defined by their individual prompts.
+5. Do not read or output `.env`, real secrets, existing business databases, or real user audio. Do not send messages to real WhatsApp contacts. Do not allow test processes to load real configuration automatically.
+6. By default, phases 05-06 use an independent database, audio directory, test credentials, and mocked external services. Preserve real authentication, signature verification, queueing, storage, state transitions, and transcoding paths; do not skip these steps to produce attractive results.
+7. Do not overwrite uncommitted user changes. Do not commit, push, publish, or adjust production environments without authorization. When access is restricted, use the tool's prescribed permission flow and do not attempt to bypass it.
+8. Execute only the specified phase. Record work needed by later phases in the plan; do not implement it incidentally. At the end of the phase, state the artifacts, key decisions, open items, and whether the phase is complete.
+9. For information gaps that do not block the current phase, use explicit, changeable assumptions. For critical gaps that determine the test subject or correctness judgment, complete the unaffected work first and then ask the necessary questions.
+10. Before running a phase, check that the preceding artifacts exist and are sufficient. Do not pretend missing inputs are complete, and do not cross phases to fill them in without authorization.
+11. Read existing artifacts with the same name before updating them and preserve human decisions. Use REQ identifiers for requirements, LT identifiers for test cases, TASK identifiers for implementation tasks, and BUG identifiers for defects so they remain traceable.
+12. End every phase with a brief self-check: what this phase did, what lacks evidence, and what inputs are needed for the next phase. Do not repeatedly ask for permission for routine document edits.
 
-- 前端为 Flutter，后端为 FastAPI；有上传转写、可选翻译、WhatsApp 收件箱、Live 和聊天助手。
-- `/api/transcribe` 等待转写及可选翻译后返回；翻译失败可通过响应体中的 `translation_error` 表达，HTTP 200 不一定代表完整业务成功。
-- `/webhooks/whatsapp` 接收入站消息；WhatsApp 后台任务处理媒体下载、转写、翻译和保存。
-- 当前默认单进程启动方式下，有一个串行 WhatsApp worker。每个应用进程会启动自己的 worker，不能把该结论推广到所有部署方式。
-- `backend/inbox.py` 中 `MAX_PENDING = 100`，限制 queued 与 processing 的总数。超过容量时入队批次回滚并返回 503。
-- 工作租约当前为 300 秒，恢复时间必须考虑租约、处理耗时和前面的排队任务。
-- 收件箱当前每 5 秒刷新；助手有独立轮询行为，应在确定混合负载时检查。
-- SQLite 与本地文件参与存储；保存开关是全局配置，不是各客户端独立配置。
-- 每个 Live 客户端建立两条上游连接。Live 不属于首期必做范围。
-- 已有 pytest 功能测试覆盖部分去重、容量、故障和恢复逻辑，但不代表已验证并发性能。
-- 本项目不是已经验证过多账号隔离的系统；虚拟用户指并发客户端。
+## Known background: re-verify during later execution
 
-## 阶段 01：需求分析
+- The frontend is Flutter and the backend is FastAPI; the system supports upload transcription, optional translation, a WhatsApp inbox, Live, and a chat assistant.
+- `/api/transcribe` waits for transcription and optional translation before returning; a translation failure may be expressed through `translation_error` in the response body, so HTTP 200 does not necessarily mean complete business success.
+- `/webhooks/whatsapp` accepts inbound messages; the WhatsApp background worker handles media download, transcription, translation, and persistence.
+- The current default single-process startup has one serial WhatsApp worker. Each application process starts its own worker; this conclusion must not be generalized to all deployment modes.
+- `backend/inbox.py` has `MAX_PENDING = 100`, limiting the combined queued and processing count. When capacity is exceeded, the enqueue batch is rolled back and returns 503.
+- The current work lease is 300 seconds. Recovery timing must account for the lease, processing time, and tasks already waiting in the queue.
+- The inbox currently refreshes every 5 seconds; the assistant has separate polling behavior that should be checked when mixed load is defined.
+- SQLite and local files participate in persistence; the save setting is global rather than per-client.
+- Each Live client creates two upstream connections. Live is not required in the first phase.
+- Existing pytest functional tests cover some deduplication, capacity, failure, and recovery logic, but they do not prove concurrent performance.
+- This project is not a system with verified multi-account isolation; a virtual user means a concurrent client.
 
-### 完整 prompt
+## Phase 01: Requirements analysis
 
-你是负责 Voice Notes 性能测试的 QA 分析师。目标是把“用 load test 把 QA 应用到当前项目”的想法转换成可验证需求。本阶段只做需求分析并编写文档。
+### Complete prompt
 
-输入：README.md、backend/app.py、backend/inbox.py、backend/whatsapp.py、backend/services.py、backend/voice_feedback.py、相关前端调用及现有测试。只读必要文件。
+You are the QA analyst responsible for Voice Notes performance testing. The goal is to turn the idea of "applying load testing to QA for the current project" into verifiable requirements. This phase performs requirements analysis and writes documentation only.
 
-请完成以下工作：
+Inputs: `README.md`, `backend/app.py`, `backend/inbox.py`, `backend/whatsapp.py`, `backend/services.py`, `backend/voice_feedback.py`, relevant frontend calls, and existing tests. Read only the necessary files.
 
-1. 说明系统的实际业务流程，区分同步上传与异步 WhatsApp 处理。画出简单流程图，或使用清楚的步骤列表。
-2. 定义首期范围为上传转写／翻译、签名有效的 WhatsApp 入站、收件箱查询、去重与故障恢复。Live、助手对话和真实外发作为后续范围，不顺带加入实现。
-3. 建立 REQ-001 起的需求表，每条包含业务价值、触发条件、预期行为、验证方式和优先级。覆盖性能和数据正确性。
-4. 将负载拆成并发客户端数量、上传频率、消息到达频率、音频长度／大小、数据库规模和测试持续时间；不要把用户数等同于请求数。
-5. 提出初始性能目标。可使用查询 P95 ≤ 500 ms、未满队列时 webhook P95 ≤ 1 秒、正常请求非预期错误率 < 1% 作为待校准草案。注明适用环境与待确认状态，不称为已有 SLA。
-6. 分别定义 HTTP 成功、业务完整成功、部分成功、预期拒绝、非预期失败。特别处理 translation_error、队列满、重复事件和错误签名。
-7. 定义数据正确性要求：已接收的独立有效消息可追踪、不丢失、不串结果；重复投递不重复生成业务记录；失败和重试状态可解释。
-8. 写出风险、假设、尚未确定的问题，以及怎样在后续阶段得到答案。
+Complete the following:
 
-产物：`docs/load-testing/01-requirements.md`。
+1. Describe the system's actual business flows, distinguishing synchronous upload processing from asynchronous WhatsApp processing. Draw a simple flowchart or provide clear numbered steps.
+2. Define the first-phase scope as upload transcription/translation, validly signed inbound WhatsApp messages, inbox queries, deduplication, and failure recovery. Defer Live, assistant conversations, and real outbound messaging; do not add them incidentally.
+3. Create a requirements table starting at REQ-001. Each requirement must include business value, trigger, expected behavior, verification method, and priority. Cover performance and data correctness.
+4. Decompose load into concurrent client count, upload frequency, message arrival frequency, audio length/size, database scale, and test duration; do not equate user count with request count.
+5. Propose initial performance targets. Query P95 <= 500 ms, webhook P95 <= 1 second while the queue is not full, and an unexpected error rate below 1% may be used as calibration drafts. Identify the applicable environment and pending confirmation status; do not call them existing SLAs.
+6. Define HTTP success, complete business success, partial success, expected rejection, and unexpected failure separately. Handle `translation_error`, full queues, duplicate events, and invalid signatures explicitly.
+7. Define data correctness requirements: every accepted independent valid message is traceable, not lost, and not mixed with another result; duplicate deliveries do not create duplicate business records; failure and retry states are explainable.
+8. Document risks, assumptions, unresolved questions, and how later phases will answer them.
 
-完成标准：每条核心需求可测试；范围、术语、负载假设和成功条件明确；已验证事实有源码依据；没有测试结果或容量结论。
+Artifact: `docs/load-testing/01-requirements.md`.
 
-结束时输出文档链接、最重要的三项需求和下一阶段所需输入，然后停止。
+Definition of done: Every core requirement is testable; scope, terminology, load assumptions, and success criteria are clear; verified facts have source references; there are no test results or capacity conclusions.
 
-## 阶段 02：测试架构与观测设计
+At the end, output the document link, the three most important requirements, and the inputs needed for the next phase, then stop.
 
-### 完整 prompt
+## Phase 02: Test architecture and observability design
 
-你是负责本项目性能测试的架构设计师。读取阶段 01 产物和相关实现，设计可复现、可定位瓶颈的测试架构。本阶段只写设计文档，不编写或执行代码。
+### Complete prompt
 
-请完成以下工作：
+You are the test architect responsible for performance testing this project. Read the Phase 01 artifact and relevant implementation, then design a reproducible test architecture that can locate bottlenecks. This phase writes design documentation only; do not write or execute code.
 
-1. 画出负载生成器、测试后端、SQLite、音频目录、FFmpeg、模拟 Meta／OpenAI 服务和指标采集之间的关系。
-2. 以 Locust 作为首期 HTTP 测试候选，简要说明选择理由与限制。特别说明：普通循环用户任务不会自动提供与响应速度无关的固定到达率；WhatsApp 到达率需要独立调度并计量实际发送偏差。
-3. 设计模拟外部服务的接入边界。保留真实签名校验、鉴权、媒体校验、队列、文件操作、状态转换和 OGG 转码；明确模拟在 SDK／HTTP transport／上游协议哪一层发生。测试信任规则不能弱化正式环境的媒体 URL 校验。
-4. 检查 app 启动时加载配置的行为，设计防止测试进程载入真实 .env、访问现有数据或调用真实供应商的方式。不能只用“配置了测试数据库”作为完整隔离证明。
-5. 定义负载模型：浏览者按当前刷新间隔运行；上传者完成操作后有等待时间；入站消息按独立计划到达。记录计划和实际发出的请求／消息数量、实际速率和生成器资源占用。
-6. 固定基线的进程数、worker 数、音频样本、外部延迟、保存开关和预置数据量。开启与关闭保存分开运行。单进程与多进程必须是不同实验，不直接混合比较。
-7. 定义时间点及统计口径：HTTP 请求开始／结束、入队、领取、处理完成、客户端观察到结果；区分排队、处理、查询轮询带来的观察延迟。不要把第一次轮询发现结果的时间当作精确完成时间。
-8. 对照现有日志和数据库字段，列出哪些指标已有证据、哪些需要阶段 05 增加最小测试观测点。使用测试 run ID／消息 ID 关联数据，避免采集真实正文与凭据。
-9. 定义正确性核对方式：注入清单、接收确认、数据库记录和音频文件对应核对。不能只依赖有返回条数上限的收件箱列表；区分执行尝试次数和最终业务记录数。
-10. 设计环境清单、每次运行独立目录、开始前状态、结束后的排空与资源清理。关闭自己启动的进程，不影响已有服务；保留结果供报告使用。
-11. 说明生成器与服务同机运行的限制，以及何时需要分机复测。模拟上游容量只说明本地系统在指定条件下的表现。
+Complete the following:
 
-产物：`docs/load-testing/02-architecture.md`，包含架构图、负载模型、模拟协议、隔离策略、指标字典和需要实现的最小接入点。
+1. Show the relationships among the load generator, test backend, SQLite, audio directory, FFmpeg, mocked Meta/OpenAI services, and metrics collection.
+2. Use Locust as the first-phase HTTP test candidate and briefly explain the choice and limitations. In particular, state that ordinary loop-user tasks do not automatically provide a fixed arrival rate independent of response speed; WhatsApp arrival rates require an independent scheduler and measurement of actual sending deviation.
+3. Design the integration boundary for mocked external services. Preserve real signature verification, authentication, media validation, queueing, file operations, state transitions, and OGG transcoding. Specify whether mocking occurs at the SDK, HTTP transport, or upstream protocol layer. Test trust rules must not weaken production media URL validation.
+4. Inspect configuration loading at app startup and design protection against loading a real `.env`, accessing existing data, or calling real providers. Configuring a test database alone is not sufficient proof of isolation.
+5. Define the load model: readers poll at the current refresh interval; uploaders wait after completing an operation; inbound messages arrive on an independent schedule. Record planned and actual request/message counts, actual rates, and generator resource usage.
+6. Fix the process count, worker count, audio samples, external latency, save setting, and preloaded data volume for the baseline. Run saving enabled and disabled as separate experiments. Single-process and multi-process runs must be separate experiments and must not be compared as if they were the same setup.
+7. Define timestamps and statistical semantics: HTTP request start/end, enqueue, claim, processing completion, and client-observed result. Distinguish queueing, processing, and polling-observation delay. Do not treat the first poll that discovers a result as the exact completion time.
+8. Compare existing logs and database fields and list which metrics have evidence and which require minimal observation points in Phase 05. Use a test run ID/message ID to correlate data; do not collect real message content or credentials.
+9. Define correctness checks: compare the injection manifest, receipt acknowledgements, database records, and corresponding audio files. Do not rely only on inbox lists with a maximum result count; distinguish execution attempts from final business record count.
+10. Design an environment inventory, independent directory per run, pre-run state, post-run draining, and resource cleanup. Stop processes started by the test without affecting existing services; retain results for reporting.
+11. Explain the limitations of running the generator and service on the same host and when a separate-host rerun is needed. Upstream simulation capacity describes only local-system behavior under the stated conditions.
 
-完成标准：可区分负载生成器、应用、存储、转码与外部延迟；每个指标有来源和计时口径；列明尚不存在的测试能力，不把它们写成可用命令。
+Artifacts: `docs/load-testing/02-architecture.md`, containing the architecture diagram, load model, mock protocol, isolation strategy, metric dictionary, and minimal integration points to implement.
 
-结束时输出文档链接、主要设计决定和待解决限制，然后停止。
+Definition of done: The load generator, application, storage, transcoding, and external latency are distinct; every metric has a source and timing definition; capabilities not yet available are listed and are not presented as runnable commands.
 
-## 阶段 03：QA 测试用例与数据设计
+At the end, output the document link, main design decisions, and unresolved limitations, then stop.
 
-### 完整 prompt
+## Phase 03: QA test case and data design
 
-你是测试设计负责人。读取阶段 01 和 02，编写可执行、可追踪、可判定结果的性能与可靠性测试用例。本阶段不实现脚本、不运行测试。
+### Complete prompt
 
-请完成以下工作：
+You are the test design lead. Read phases 01 and 02 and write executable, traceable, and objectively judgeable performance and reliability test cases. Do not implement scripts or run tests in this phase.
 
-1. 为每个用例分配 LT 编号，写明关联 REQ、目的、优先级、前置状态、数据、负载、步骤、持续时间、观测点、预期结果、停止条件和测试后处理。
-2. 至少包含：单客户端基线、5／10 客户端阶梯负载、20／50 条消息突发、去重、队列容量边界、批次回滚、持续负载、外部限流／超时、处理中重启恢复、上传翻译部分失败、保存开关开启与关闭两组实验。
-3. 设计一条明确案例：10 秒内注入 50 条独立消息并重复投递其中 10 条，同时 5 个客户端查询收件箱。核对 50 条独立业务结果、重复记录数、关联正确性、查询延迟和排空时间。
-4. 队列容量用例按 queued + processing 总数构造 99／100／101 边界，说明如何控制消费以避免竞态。区分测试前置状态控制和真实正常负载。验证满队列时整批回滚，以及容量恢复后重新投递的结果。
-5. 明确重复事件被接受但未新增、签名错误被拒绝、正常消息成功、转写成功但翻译失败等情况的断言。不要用 HTTP 200 一项代替业务断言。
-6. 重启恢复用例按当前租约和重试机制制定观察窗口。区分未到恢复时间、已恢复、最终失败和永久卡住；记录能验证与不能验证的故障窗口。
-7. 定义音频集：10 秒、30 秒、2 分钟；MP3、WAV、OGG；合法、空文件、损坏和超限样本。功能负例与正常性能负载分开统计。使用自录或合成数据，不使用真实业务录音。
-8. 模拟服务返回可核对的稳定结果，但不能通过短路真实媒体校验或转码路径来实现。说明如何校验音频与结果映射。
-9. 为每条性能阈值注明负载、模拟延迟、数据规模、最少样本量和重复规则。样本不足时可以得出“证据不足”，不能硬判通过。预先定义复测触发条件，不反复运行直到偶然通过。
-10. 定义停止注入的条件，例如服务失去响应、资源达到所声明的上限、发现数据损坏或实际请求偏离隔离目标。停止注入不等于立即丢弃在途任务，应收集证据并进行有界排空。
-11. 建立 REQ → LT 的追踪矩阵，标出未覆盖或推迟的需求。
+Complete the following:
 
-产物：`docs/load-testing/03-test-cases.md`、`docs/load-testing/03-test-data.md`、`docs/load-testing/03-traceability.md`。
+1. Assign an LT identifier to each case and specify linked REQs, purpose, priority, preconditions, data, load, steps, duration, observation points, expected results, stop conditions, and post-test processing.
+2. Include at least: single-client baseline, 5/10-client step load, 20/50-message bursts, deduplication, queue-capacity boundaries, batch rollback, sustained load, upstream rate limiting/timeouts, restart recovery during processing, partial upload-translation failure, and separate save-enabled/save-disabled experiments.
+3. Design one explicit case: inject 50 independent messages within 10 seconds, redeliver 10 of them, and have five clients query the inbox. Verify 50 independent business results, duplicate record count, association correctness, query latency, and drain time.
+4. Construct queue-capacity cases at 99/100/101 combined queued-plus-processing items and explain how consumption is controlled to avoid races. Distinguish controlled pre-test state from normal load. Verify whole-batch rollback at a full queue and results after redelivery when capacity recovers.
+5. Assert explicitly that duplicate events are accepted without creating new records, invalid signatures are rejected, normal messages succeed, and transcription-success/translation-failure is handled correctly. Do not substitute a single HTTP 200 assertion for business assertions.
+6. Define the restart-recovery observation window using the current lease and retry mechanism. Distinguish not-yet-recovered, recovered, permanently failed, and permanently stuck states; record failure windows that can and cannot be verified.
+7. Define the audio set: 10-second, 30-second, and 2-minute samples; MP3, WAV, and OGG; valid, empty, corrupted, and oversized samples. Report functional negatives separately from normal performance load. Use self-recorded or synthetic data, never real business recordings.
+8. Have mocked services return stable, verifiable results, but do not bypass real media validation or transcoding. Explain how audio-to-result mapping is verified.
+9. For every performance threshold, specify load, mock latency, data scale, minimum sample size, and repetition rules. If the sample is insufficient, report "insufficient evidence" rather than forcing pass. Define rerun triggers in advance; do not repeat until a run happens to pass.
+10. Define injection stop conditions, such as loss of service responsiveness, resource reaching the declared limit, data corruption, or actual requests deviating from the isolation target. Stopping injection does not mean immediately discarding in-flight tasks; collect evidence and perform bounded draining.
+11. Build a REQ-to-LT traceability matrix and mark uncovered or deferred requirements.
 
-完成标准：其他工程师可按文档复现实验；每个用例可判为通过、失败或证据不足；负载、正确性检查和结束条件清晰。
+Artifacts: `docs/load-testing/03-test-cases.md`, `docs/load-testing/03-test-data.md`, and `docs/load-testing/03-traceability.md`.
 
-结束时输出文档链接、用例覆盖概况和未覆盖项，然后停止。
+Definition of done: Another engineer can reproduce each experiment from the documents; every case can be judged pass, fail, or insufficient evidence; load, correctness checks, and end conditions are clear.
 
-## 阶段 04：实施计划与设计评审
+At the end, output the document links, coverage overview, and uncovered items, then stop.
 
-### 完整 prompt
+## Phase 04: Implementation plan and design review
 
-你是本项目测试工程的技术负责人。读取阶段 01～03，检查方案能否落地，并拆成小而可验证的实施任务。本阶段是设计阶段的最后一步，只写文档，不实现代码。
+### Complete prompt
 
-请完成以下工作：
+You are the technical lead for this project's test engineering. Read phases 01-03, check whether the plan is implementable, and break it into small, verifiable implementation tasks. This is the final design phase; write documentation only and do not implement code.
 
-1. 检查需求、架构、用例是否一致，列出冲突和缺口。可在已有设计范围内修正文档并记录理由；不能降低正确性要求来掩盖实现困难。
-2. 为实施任务分配 TASK 编号，写明关联 REQ／LT、预计修改文件、实现目的、依赖、验收方式和完成定义。按依赖排序，不依赖多人或子代理并行工作。
-3. 至少拆出：测试运行配置与隔离、上游模拟、样本与清单、HTTP 用户模型、固定到达率注入、任务完成观测、数据核对、结果导出、运行说明与必要验证。
-4. 明确哪些工作只涉及测试目录，哪些可能需要应用中的最小可注入接口。没有证据时不提前引入 Redis、替换数据库、增加 worker 或大改架构。
-5. 为每种测试配置规定负载、时长、预期上游调用数、输出文件和停止／清理方式。设计 run manifest，记录版本、机器信息、进程数、场景、样本、阈值、开始结束时间和退出状态。
-6. 拟定以后需要提供的启动、smoke、baseline、load、spike、boundary、soak、recovery 和报告命令接口。明确标成“拟实现”，不得冒充目前已存在的脚本或命令。
-7. 规定阶段 05 的验证范围：与修改相关的功能测试和小规模隔离 smoke；阶段 06 才执行完整负载。已有检查通过后，不重复扩大测试，除非有新变化或失败证据。
-8. 建立设计就绪检查表：前序文档齐全、隔离可实现、到达率可测、业务成功有断言、关键指标有来源、恢复窗口合理、阈值预先确定、真实外部发送不会发生。
-9. 估算工程工作量并注明不确定性；不承诺未经验证的吞吐量。
+Complete the following:
 
-产物：`docs/load-testing/04-implementation-plan.md` 和 `docs/load-testing/04-design-review.md`。
+1. Check consistency among requirements, architecture, and test cases; list conflicts and gaps. You may correct documents within the existing design scope and record the reason; do not lower correctness requirements to hide implementation difficulty.
+2. Assign TASK identifiers to implementation tasks and specify linked REQs/LTs, expected files to modify, implementation purpose, dependencies, acceptance method, and definition of done. Order by dependency; do not rely on multiple people or subagents working in parallel.
+3. At minimum, separate: test-run configuration and isolation, upstream mocking, samples and manifests, HTTP user model, fixed-rate injection, task-completion observation, data verification, result export, run instructions, and required validation.
+4. State which work is limited to test directories and which may require a minimal injectable interface in the application. Without evidence, do not introduce Redis, replace the database, add workers, or make broad architecture changes in advance.
+5. Define load, duration, expected upstream call count, output files, and stop/cleanup behavior for each test configuration. Design a run manifest recording version, machine information, process count, scenario, samples, thresholds, start/end time, and exit status.
+6. Propose future `startup`, `smoke`, `baseline`, `load`, `spike`, `boundary`, `soak`, `recovery`, and report command interfaces. Mark them clearly as "planned"; do not present nonexistent scripts or commands as available.
+7. Define Phase 05 validation scope: related functional tests and a small isolated smoke test; execute the full load only in Phase 06. After existing checks pass, do not expand testing unless there is new change or failure evidence.
+8. Create a design-readiness checklist: preceding documents complete, isolation implementable, arrival rate measurable, business success asserted, key metrics sourced, recovery window reasonable, thresholds predetermined, and no real external sending.
+9. Estimate engineering effort and state uncertainty; do not promise unverified throughput.
 
-完成标准：实施任务可独立验证；关键设计缺口已解决或明确阻塞项；命令接口清晰标为拟实现；没有新增应用或测试代码。
+Artifacts: `docs/load-testing/04-implementation-plan.md` and `docs/load-testing/04-design-review.md`.
 
-结束时给出“设计就绪”或“尚有阻塞项”的判断与依据，然后停止。不要自动开始阶段 05。
+Definition of done: Implementation tasks are independently verifiable; key design gaps are resolved or clearly blocking; command interfaces are clearly marked as planned; no application or test code is added.
 
-## 阶段 05：实现与小规模验证（以后执行）
+At the end, state whether the design is "ready" or has "blocking items", with the evidence, then stop. Do not start Phase 05 automatically.
 
-### 完整 prompt
+## Phase 05: Implementation and small-scale validation (later)
 
-你是实现本次负载测试工具的工程师。用户此次明确执行阶段 05，授权依据阶段 01～04 实现测试代码并做规定的小规模隔离验证。先检查前序产物和设计就绪状态，不自行补做一整套缺失设计。
+### Complete prompt
 
-请完成以下工作：
+You are the engineer implementing the load-testing tools. The user has explicitly requested Phase 05 and authorizes implementation of test code according to phases 01-04 and the required small isolated validation. First check the preceding artifacts and design-readiness status; do not fill in a complete missing design independently.
 
-1. 阅读相关代码、现有测试与工作区状态，按 TASK 顺序实施。复用项目已有约定，保留用户修改。
-2. 实现隔离配置、模拟上游、测试样本、负载模型、独立到达率注入、业务断言、必要指标和结果导出。必要的应用改动保持最小，并说明默认行为是否受影响。
-3. 测试模式必须明确启用，不能悄悄改变正常运行行为；缺少模拟配置时不能回退到真实服务。
-4. 为队列完成、重复记录、文件映射和预期拒绝写有意义的验证。不要为了数量编写只重复实现细节的测试。
-5. 实现阶段 04 中拟定的命令接口，并将确实存在、能够运行的命令写入运行说明。标明工作目录、依赖、参数、产物位置、资源范围和清理方式；不把真实凭据放进命令。
-6. 运行与修改相关的必要功能检查，以及预先限定的小规模隔离 smoke。确保真实服务调用为零，检查实际输出和退出状态。
-7. 为阶段 06 提供完整的预检、启动、执行、排空和清理方法。没有验证过的命令明确标记，不虚构“全部通过”。
+Complete the following:
 
-产物：实施代码及配置、`docs/load-testing/05-runbook.md`、`docs/load-testing/05-validation.md`。具体代码目录沿用阶段 04 的决定。
+1. Read relevant code, existing tests, and workspace status. Implement tasks in TASK order, reuse project conventions, and preserve user changes.
+2. Implement isolated configuration, mocked upstreams, test samples, load models, independent arrival-rate injection, business assertions, required metrics, and result export. Keep necessary application changes minimal and explain whether default behavior is affected.
+3. The test mode must be explicitly enabled and must not silently change normal runtime behavior. If mock configuration is missing, do not fall back to real services.
+4. Add meaningful verification for queue completion, duplicate records, file mapping, and expected rejections. Do not write tests that merely repeat implementation details for the sake of quantity.
+5. Implement the command interfaces planned in Phase 04 and document commands that actually exist and run in the runbook. State working directory, dependencies, parameters, artifact location, resource scope, and cleanup. Do not put real credentials in commands.
+6. Run required related functional checks and the pre-limited small isolated smoke. Ensure zero calls to real services and inspect actual output and exit status.
+7. Provide preflight, startup, execution, drain, and cleanup methods for Phase 06. Mark unverified commands explicitly and do not claim that everything passed.
 
-完成标准：核心测试链路可重复运行；smoke 和相关功能验证有真实证据；正式应用行为无非预期改变；没有执行完整 load／spike／soak，没有调用真实供应商。
+Artifacts: implementation code/configuration, `docs/load-testing/05-runbook.md`, and `docs/load-testing/05-validation.md`. Use the code directory selected in Phase 04.
 
-结束时给出变更摘要、已执行命令与结果、剩余限制，然后停止。
+Definition of done: The core test path is reproducible; smoke and related functional validation have real evidence; production behavior has no unexpected change; no full load/spike/soak test was run and no real provider was called.
 
-## 阶段 06：执行测试并收集证据（以后执行）
+At the end, summarize changes, commands run and results, and remaining limitations, then stop.
 
-### 完整 prompt
+## Phase 06: Test execution and evidence collection (later)
 
-你是本次测试执行负责人。用户此次明确执行阶段 06，授权在独立测试环境运行已设计的测试。读取阶段 01～05 和运行说明，只使用已经实现的命令，不调用真实外部服务或发送真实消息。
+### Complete prompt
 
-请完成以下工作：
+You are the test execution lead. The user has explicitly requested Phase 06 and authorizes running the designed tests in an isolated test environment. Read phases 01-05 and the runbook; use only implemented commands; do not call real external services or send real messages.
 
-1. 确认测试目标、独立数据目录、模拟服务、测试凭据、进程归属、资源上限与空闲端口。确保配置与输出目录对应本次 run，不能指向现有业务数据。
-2. 固定并保存实验配置和验收阈值。记录当前源码版本；若存在未提交修改，记录相关文件状态或摘要，不能仅用 commit ID 代表运行版本。
-3. 先运行环境 smoke，再按设计执行 baseline、阶梯负载、spike、boundary、soak 和 recovery。每组运行按设计重置或预置数据；不把上一组的积压当作下一组的基线。
-4. 比较计划与实际到达率、生成器资源占用和后端资源占用。生成器无法产生目标负载时标为实验无效或证据不足，不能宣称系统通过目标负载。
-5. 同时记录 HTTP 与业务结果、排队与完成时间、最大积压、排空时间、重复／缺失记录、资源变化。将故意注入的错误和非预期错误分别报告。
-6. 满足预定停止条件时停止注入，保留原始结果，按计划进行有界排空与清理。对中止、失败或未执行的场景明确标记。
-7. 出现问题时保存可复现证据，不边测试边调阈值或改代码。只有设计中规定的复测条件或新的失败诊断需求成立时才重复运行。
-8. 结束后关闭本次启动的进程，保留报告所需的原始数据。只处理本次 run 的临时文件，不删除其他运行或业务资料。
+Complete the following:
 
-产物：按 run ID 保存的原始指标、环境清单、脱敏日志、数据核对结果，以及 `docs/load-testing/06-execution-log.md`。
+1. Confirm the test target, independent data directory, mocked services, test credentials, process ownership, resource limits, and free ports. Ensure configuration and output directories belong to this run and cannot point to existing business data.
+2. Fix and save the experiment configuration and acceptance thresholds. Record the current source version; if uncommitted changes exist, record their file status or summary instead of relying only on a commit ID.
+3. Run the environment smoke first, then baseline, step load, spike, boundary, soak, and recovery according to the design. Reset or preload data for each run as designed; do not use backlog from one run as the baseline for another.
+4. Compare planned and actual arrival rates, generator resource usage, and backend resource usage. If the generator cannot produce the target load, mark the experiment invalid or the evidence insufficient; do not claim the system met the target load.
+5. Record HTTP and business results, queue and completion times, maximum backlog, drain time, duplicate/missing records, and resource changes together. Report deliberately injected errors separately from unexpected errors.
+6. When predetermined stop conditions are met, stop injection, retain raw results, and perform bounded draining and cleanup as planned. Clearly mark aborted, failed, or unexecuted scenarios.
+7. When problems occur, preserve reproducible evidence; do not tune thresholds or change code during testing. Repeat only when a designed rerun condition or new diagnostic need exists.
+8. Close processes started for this run after completion and retain raw data needed for reporting. Handle only temporary files belonging to this run; do not delete other runs or business materials.
 
-完成标准：所有计划场景有执行状态与原因；运行环境和负载可追溯；数据正确性经过核对；无法完成的实验没有被写成通过。
+Artifacts: raw metrics, environment inventory, redacted logs, data verification results saved by run ID, and `docs/load-testing/06-execution-log.md`.
 
-结束时概述执行范围、发现的问题与未完成项，然后停止。不要自动修复或生成没有证据的容量结论。
+Definition of done: Every planned scenario has an execution status and reason; environment and load are traceable; data correctness is checked; incomplete experiments are not reported as passing.
 
-## 阶段 07：分析、缺陷报告与回归计划（以后执行）
+At the end, summarize execution scope, findings, and incomplete items, then stop. Do not automatically fix issues or produce unsupported capacity conclusions.
 
-### 完整 prompt
+## Phase 07: Analysis, defect reports, and regression plan (later)
 
-你是负责质量结论的 QA 评审者。读取阶段 01～06 的产物及真实原始结果，形成可以用于项目复盘和 QA 作品展示的测试报告。本阶段只做分析和报告，不改代码、不重新压测。
+### Complete prompt
 
-请完成以下工作：
+You are the QA reviewer responsible for quality conclusions. Read artifacts from phases 01-06 and the actual raw results, then produce a test report suitable for project review and QA portfolio presentation. This phase performs analysis and reporting only; do not change code or rerun load tests.
 
-1. 按 REQ 和 LT 给出通过、失败、证据不足或未执行的状态，并链接具体 run 与证据。不能只凭平均响应时间判断通过。
-2. 分场景展示请求数、独立消息数、样本量、实际负载、P50／P95／P99、业务成功率、预期拒绝、非预期失败、积压和数据正确性核对结果。小样本的分位数要说明局限。
-3. 区分已观察到的症状、由证据支持的原因和待验证的瓶颈假设。结合资源与队列数据分析，不把所有等待都归因于 FastAPI 或 SQLite。
-4. 用标准静态图表展示有数据支持的响应时间随负载变化、队列随时间变化、资源变化；保留图表数据与导出文件。没有数据时不生成示意图冒充实测图。
-5. 为可复现的问题建立 BUG 编号，包含标题、严重程度、关联 REQ／LT、环境、复现步骤、预期／实际结果、证据和建议调查方向。正常的容量保护行为只有违反既定需求时才记为缺陷。
-6. 给出“在何种环境、数据和模拟延迟下，哪些负载已验证满足哪些目标”。不能把模拟环境结论推广为真实 OpenAI／Meta 服务或生产环境容量。
-7. 提出按证据排序的改进建议与回归计划，写清需要复测哪些用例、保持哪些对照条件。修复和复测留待后续明确任务，不在本阶段自动执行。
-8. 整理一段适合 QA 项目展示的说明：业务问题、测试方法、关键发现、证据和限制。不虚构修复、性能提升或个人经历。
+Complete the following:
 
-产物：`docs/load-testing/07-test-report.md`、`docs/load-testing/07-defects.md`、`docs/load-testing/07-regression-plan.md`，以及有实际数据支持的图表。
+1. Give each REQ and LT a status of pass, fail, insufficient evidence, or not executed, with links to the specific run and evidence. Do not judge pass/fail from average response time alone.
+2. For each scenario, show request count, independent message count, sample size, actual load, P50/P95/P99, business success rate, expected rejections, unexpected failures, backlog, and data-correctness verification. Explain percentile limitations for small samples.
+3. Distinguish observed symptoms, evidence-supported causes, and bottleneck hypotheses awaiting verification. Analyze resource and queue data; do not attribute every wait to FastAPI or SQLite.
+4. Use standard static charts to show response time versus load, queue over time, and resource changes only where data supports them. Retain chart data and exports. When data is absent, do not create illustrative charts that look measured.
+5. Create BUG identifiers for reproducible problems, including title, severity, linked REQ/LT, environment, reproduction steps, expected/actual result, evidence, and suggested investigation direction. Normal capacity-protection behavior is a defect only when it violates an established requirement.
+6. State which targets have been verified under which environment, data, and mock latency, and at what load. Do not generalize mock-environment conclusions to real OpenAI/Meta services or production capacity.
+7. Provide evidence-ranked improvement recommendations and a regression plan, specifying cases to rerun and control conditions to preserve. Leave fixes and reruns to later explicitly authorized tasks; do not execute them in this phase.
+8. Prepare a QA-project presentation summary covering the business problem, test method, key findings, evidence, and limitations. Do not invent fixes, performance improvements, or personal experience.
 
-完成标准：结论能追溯到数据；缺陷能复现；范围与局限透明；没有证据的部分明确保留为未知。
+Artifacts: `docs/load-testing/07-test-report.md`, `docs/load-testing/07-defects.md`, `docs/load-testing/07-regression-plan.md`, and charts backed by actual data.
 
-结束时给出质量结论、主要风险、下一步优先事项和产物链接，然后停止。
+Definition of done: Conclusions trace to data; defects are reproducible; scope and limitations are transparent; unsupported areas remain explicitly unknown.
 
-## 设计完成后的人工检查重点
+At the end, provide the quality conclusion, main risks, next priorities, and artifact links, then stop.
 
-阅读阶段 01～04 时，重点检查：目标是否符合你想练习的 QA 能力；用例是否能判断业务正确性；压力是否贴合当前项目；指标是否真能采集；测试是否可重复。
+## Manual review focus after design completion
 
-你发出某一阶段的执行指令，就表示希望 AI 在该阶段规定的范围内完成工作。无需每修改一份文档都再次确认。真实供应商测试、真实消息发送、正式环境部署和架构扩容不在这套默认工作流中。
+When reviewing phases 01-04, focus on whether the goals match the QA skills being practiced, whether cases can judge business correctness, whether the load matches the current project, whether metrics can actually be collected, and whether tests are reproducible.
+
+Sending an execution instruction for a phase means that you want the AI to complete that phase within its stated scope. There is no need to confirm again after every document edit. Real-provider testing, real message sending, production deployment, and architecture scaling are outside this default workflow.
