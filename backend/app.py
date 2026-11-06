@@ -24,6 +24,7 @@ from security import APIProtectionMiddleware
 import whatsapp
 import voice_feedback
 import followup
+import scheduled_messages
 
 ALLOWED_EXTENSIONS = {".ogg", ".opus", ".mp3", ".wav", ".m4a", ".webm"}
 try:
@@ -34,16 +35,23 @@ except ValueError:
     raise RuntimeError("MAX_UPLOAD_MB must be a whole number from 1 to 25.") from None
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1_000_000
 DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:8000,http://127.0.0.1:8000,http://localhost:8003,http://127.0.0.1:8003"
+# Flutter's Chrome runner may choose a different local port when its requested
+# port is occupied. Keep this pattern loopback-only; configured production
+# origins remain an exact allowlist and no wildcard is used.
+LOCAL_DEV_ORIGIN_REGEX = r"^http://(?:localhost|127\.0\.0\.1)(?::\d+)?$"
 
 @asynccontextmanager
 async def lifespan(_app):
-    task = asyncio.create_task(whatsapp.worker())
+    tasks = [asyncio.create_task(whatsapp.worker()),
+             asyncio.create_task(scheduled_messages.scheduler_worker())]
     try:
         yield
     finally:
-        task.cancel()
-        with suppress(asyncio.CancelledError):
-            await task
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
+            with suppress(asyncio.CancelledError):
+                await task
 
 
 app = FastAPI(title="Voice Notes v3 — iOS & WhatsApp", lifespan=lifespan)
@@ -74,11 +82,13 @@ app.add_middleware(APIProtectionMiddleware, upload_bytes=MAX_UPLOAD_BYTES)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[v.strip() for v in os.getenv("ALLOWED_ORIGINS", DEFAULT_ORIGINS).split(",")],
+    allow_origin_regex=LOCAL_DEV_ORIGIN_REGEX,
     allow_methods=["GET", "POST"], allow_headers=["Content-Type", "Authorization"],
 )
 app.include_router(live_router)
 app.include_router(whatsapp.router)
 app.include_router(followup.router)
+app.include_router(scheduled_messages.router)
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -87,7 +97,14 @@ async def http_error(_request: Request, exc: StarletteHTTPException):
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_error(_request: Request, _exc: RequestValidationError):
+async def validation_error(request: Request, exc: RequestValidationError):
+    if request.url.path.startswith('/api/whatsapp/schedules'):
+        errors = []
+        for item in exc.errors():
+            location = '.'.join(str(part) for part in item.get('loc', ()) if part != 'body')
+            errors.append({'field': location, 'message': item.get('msg', 'Invalid value.')})
+        return JSONResponse(status_code=400, content={'success': False,
+            'error': 'Check the scheduled message details.', 'details': errors})
     return JSONResponse(status_code=400, content={"success": False, "error": "Check the audio file and target language."})
 
 

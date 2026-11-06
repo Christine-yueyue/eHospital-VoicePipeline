@@ -345,6 +345,51 @@ class VoiceController extends ChangeNotifier {
         .timeout(const Duration(seconds: 15)),
   );
 
+  Future<List<Map<String, dynamic>>> approvedScheduleTemplates() async {
+    final body = _responseBody(
+      await _http
+          .get(
+            _url('/api/whatsapp/schedules/templates'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 20)),
+    );
+    return (body['templates'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> scheduledMessages() async {
+    final body = _responseBody(
+      await _http
+          .get(_url('/api/whatsapp/schedules'), headers: _headers)
+          .timeout(const Duration(seconds: 15)),
+    );
+    return (body['schedules'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> createScheduledMessage({
+    required List<String> recipients,
+    required String templateName,
+    required String templateLanguage,
+    required List<String> templateParameters,
+    required String scheduledTime,
+    String timezone = 'America/Toronto',
+  }) async => _responseBody(
+    await _http
+        .post(
+          _url('/api/whatsapp/schedules'),
+          headers: {..._headers, 'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'recipients': recipients,
+            'template_name': templateName,
+            'template_language': templateLanguage,
+            'template_parameters': templateParameters,
+            'scheduled_time': scheduledTime,
+            'timezone': timezone,
+          }),
+        )
+        .timeout(const Duration(seconds: 30)),
+  );
+
   Future<void> sendFollowup(String taskId) async => _responseBody(
     await _http
         .post(

@@ -1,0 +1,60 @@
+{
+  "info": {
+    "name": "Voice Notes — Scheduled WhatsApp Messages",
+    "description": "Backend-only schedule smoke test. Meta credentials stay in FastAPI; use only an authorized test recipient.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{"key": "token", "value": "{{app_access_token}}", "type": "string"}]
+  },
+  "variable": [
+    {"key": "base_url", "value": "http://127.0.0.1:8003"},
+    {"key": "app_access_token", "value": ""},
+    {"key": "recipient", "value": ""},
+    {"key": "template_name", "value": ""},
+    {"key": "template_language", "value": "en"},
+    {"key": "template_parameters", "value": "[]"},
+    {"key": "scheduled_time", "value": ""},
+    {"key": "schedule_id", "value": ""}
+  ],
+  "item": [
+    {
+      "name": "1. List approved templates",
+      "request": {
+        "method": "GET",
+        "url": {"raw": "{{base_url}}/api/whatsapp/schedules/templates?language={{template_language}}", "host": ["{{base_url}}"], "path": ["api", "whatsapp", "schedules", "templates"], "query": [{"key": "language", "value": "{{template_language}}"}]}
+      }
+    },
+    {
+      "name": "2. List existing contacts and check permission",
+      "request": {
+        "method": "GET",
+        "url": {"raw": "{{base_url}}/api/whatsapp/contacts", "host": ["{{base_url}}"], "path": ["api", "whatsapp", "contacts"]}
+      }
+    },
+    {
+      "name": "3. Schedule template in two minutes",
+      "event": [{
+        "listen": "prerequest",
+        "script": {"type": "text/javascript", "exec": ["const due = new Date(Date.now() + 2 * 60 * 1000);", "pm.collectionVariables.set('scheduled_time', due.toISOString());"]}
+      }, {
+        "listen": "test",
+        "script": {"type": "text/javascript", "exec": ["if (pm.response.code === 200) {", "  pm.collectionVariables.set('schedule_id', pm.response.json().schedule_id);", "}"]}
+      }],
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\n  \"recipients\": [\"{{recipient}}\"],\n  \"template_name\": \"{{template_name}}\",\n  \"template_language\": \"{{template_language}}\",\n  \"template_parameters\": {{template_parameters}},\n  \"scheduled_time\": \"{{scheduled_time}}\",\n  \"timezone\": \"America/Toronto\"\n}", "options": {"raw": {"language": "json"}}},
+        "url": {"raw": "{{base_url}}/api/whatsapp/schedules", "host": ["{{base_url}}"], "path": ["api", "whatsapp", "schedules"]}
+      }
+    },
+    {
+      "name": "4. Refresh schedule status",
+      "request": {
+        "method": "GET",
+        "url": {"raw": "{{base_url}}/api/whatsapp/schedules", "host": ["{{base_url}}"], "path": ["api", "whatsapp", "schedules"]}
+      }
+    }
+  ]
+}

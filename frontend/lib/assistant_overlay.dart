@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'connection_page.dart';
+import 'scheduled_messages_sheet.dart';
 import 'voice_controller.dart';
 
 class AssistantOverlay extends StatefulWidget {
@@ -721,6 +722,11 @@ class _AssistantOverlayState extends State<AssistantOverlay> {
                     ),
                   ),
                   IconButton(
+                    tooltip: t('Scheduled messages'),
+                    onPressed: _openScheduledMessages,
+                    icon: const Icon(Icons.schedule, color: Colors.white),
+                  ),
+                  IconButton(
                     tooltip: t('Close assistant'),
                     onPressed: () => _setOpen(false),
                     icon: const Icon(Icons.close, color: Colors.white),
@@ -941,6 +947,14 @@ class _AssistantOverlayState extends State<AssistantOverlay> {
       builder: (_) => ConnectionPage(controller: widget.controller),
     ),
   );
+
+  void _openScheduledMessages() {
+    if (!widget.controller.connected) {
+      _notice('Connect your server to use the assistant.');
+      return;
+    }
+    showScheduledMessagesSheet(context, widget.controller);
+  }
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(

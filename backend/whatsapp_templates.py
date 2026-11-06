@@ -41,18 +41,21 @@ def check_meta_response(response: httpx.Response) -> None:
     raise HTTPException(502, message + suffix)
 
 
-async def verify_template(language: str) -> dict:
+async def verify_template(language: str, template_name: str | None = None,
+                          *, max_parameters: int = 1) -> dict:
     """Return a supported, approved template from the actual sending account."""
     settings = {key: os.getenv(key, '').strip() for key in (
         'WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_WABA_ID',
-        'WHATSAPP_GRAPH_VERSION', 'WHATSAPP_FOLLOWUP_TEMPLATE_NAME')}
+        'WHATSAPP_GRAPH_VERSION')}
     if not all(settings.values()):
-        raise HTTPException(503, 'Configure the WhatsApp token, sending phone, WABA, Graph version, and template name.')
-    name = settings['WHATSAPP_FOLLOWUP_TEMPLATE_NAME']
+        raise HTTPException(503, 'Configure the WhatsApp token, sending phone, WABA, and Graph version.')
+    name = (template_name or os.getenv('WHATSAPP_FOLLOWUP_TEMPLATE_NAME', '').strip()).strip()
+    if not name:
+        raise HTTPException(503, 'Configure a template name or choose one from the approved Meta templates.')
     if not re.fullmatch(r'[a-z0-9_]{1,512}', name):
         raise HTTPException(503, 'Configure a valid WHATSAPP_FOLLOWUP_TEMPLATE_NAME in backend/.env.')
-    if language not in {'en', 'fr'}:
-        raise HTTPException(400, 'Choose English or French as the contact language.')
+    if not re.fullmatch(r'[a-z]{2,3}(?:_[A-Z]{2})?', language):
+        raise HTTPException(400, 'Choose a valid WhatsApp template language code.')
     base = f"https://graph.facebook.com/{settings['WHATSAPP_GRAPH_VERSION']}"
     headers = {'Authorization': f"Bearer {settings['WHATSAPP_ACCESS_TOKEN']}"}
     try:
@@ -103,27 +106,83 @@ async def verify_template(language: str) -> dict:
         raise HTTPException(503, 'The follow-up template must have one text body.')
     body = bodies[0].get('text', '')
     parameters = re.findall(r'\{\{\s*([^{}]+?)\s*\}\}', body)
-    if not body or parameters not in ([], ['1']):
-        raise HTTPException(503, 'Use a follow-up template with no variables or one body variable {{1}} for the contact name.')
+    expected_parameters = [str(index) for index in range(1, len(parameters) + 1)]
+    stripped_body = re.sub(r'\{\{\s*[^{}]+?\s*\}\}', '', body)
+    if (not body or len(parameters) > max_parameters or parameters != expected_parameters
+            or '{{' in stripped_body or '}}' in stripped_body):
+        raise HTTPException(503, f'Use a text template with up to {max_parameters} sequential body parameter(s), starting at {{1}}.')
     text_parts = []
     for item in components:
         kind = item.get('type')
         text = item.get('text', '')
         if (kind not in {'HEADER', 'BODY', 'FOOTER'}
                 or (kind == 'HEADER' and item.get('format') != 'TEXT')
-                or (kind != 'BODY' and '{{' in text)):
-            raise HTTPException(503, 'This assistant supports text templates without buttons or media, with at most one contact-name body variable.')
+            or (kind != 'BODY' and '{{' in text)):
+            raise HTTPException(503, 'Scheduled messages support text templates without buttons or media; parameters must be in the body.')
         if text:
             text_parts.append(text)
     return {'name': name, 'language': language, 'body': body,
             'parameter_count': len(parameters), 'preview': '\n\n'.join(text_parts)}
 
 
-def template_payload(template: dict, contact_name: str) -> dict:
+async def list_approved_templates(language: str | None = None) -> list[dict]:
+    """List account-owned approved text templates usable by this backend."""
+    settings = {key: os.getenv(key, '').strip() for key in (
+        'WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_WABA_ID',
+        'WHATSAPP_GRAPH_VERSION')}
+    if not all(settings.values()):
+        raise HTTPException(503, 'Configure the WhatsApp token, sending phone, WABA, and Graph version.')
+    if language is not None and not re.fullmatch(r'[a-z]{2,3}(?:_[A-Z]{2})?', language):
+        raise HTTPException(400, 'Choose a valid WhatsApp template language code.')
+    base = f"https://graph.facebook.com/{settings['WHATSAPP_GRAPH_VERSION']}"
+    headers = {'Authorization': f"Bearer {settings['WHATSAPP_ACCESS_TOKEN']}"}
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            response = await client.get(
+                f"{base}/{settings['WHATSAPP_WABA_ID']}/message_templates",
+                params={'fields': 'name,status,language,components', 'limit': 100}, headers=headers)
+        check_meta_response(response)
+        data = response.json()['data']
+    except HTTPException:
+        raise
+    except httpx.RequestError:
+        raise HTTPException(503, 'Could not load approved WhatsApp templates from Meta.') from None
+    except (ValueError, KeyError, TypeError, AttributeError):
+        raise HTTPException(502, 'Meta returned an unreadable template list.') from None
+    result = []
+    seen = set()
+    for item in data:
+        name = item.get('name')
+        item_language = item.get('language')
+        if not isinstance(name, str) or not isinstance(item_language, str):
+            continue
+        key = (name, item_language)
+        if (item.get('status') != 'APPROVED' or not isinstance(item_language, str)
+                or (language is not None and item_language != language)
+                or key in seen):
+            continue
+        try:
+            verified = await verify_template(item_language, name, max_parameters=5)
+        except HTTPException:
+            continue
+        result.append(verified)
+        seen.add(key)
+    return result
+
+
+def template_payload(template: dict, contact_name: str, parameters: list[str] | None = None) -> dict:
     result = {'name': template['name'], 'language': {'code': template['language']}}
-    if template['parameter_count']:
+    if parameters is not None:
+        if len(parameters) != template['parameter_count']:
+            raise HTTPException(400, 'Provide a value for each required template parameter.')
+        values = parameters
+    elif template['parameter_count']:
+        values = [contact_name.split()[0]]
+    else:
+        values = []
+    if values:
         result['components'] = [{'type': 'body', 'parameters': [
-            {'type': 'text', 'text': contact_name.split()[0]}]}]
+            {'type': 'text', 'text': value} for value in values]}]
     return result
 
 
