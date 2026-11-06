@@ -1,0 +1,78 @@
+name: Voice Pipeline browser regression
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-and-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      APP_ACCESS_TOKEN: qa-ci-token-not-a-secret
+      OPENAI_API_KEY: ""
+      PYTHON_DOTENV_DISABLED: "1"
+      INBOX_DB_PATH: ${{ runner.temp }}/voice-pipeline/inbox.sqlite3
+      VOICE_FEEDBACK_DB_PATH: ${{ runner.temp }}/voice-pipeline/voice_feedback.sqlite3
+      VOICE_FEEDBACK_AUDIO_DIR: ${{ runner.temp }}/voice-pipeline/audio
+      QA_FRONTEND_URL: http://127.0.0.1:5174
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install Python dependencies and Chromium
+        run: |
+          python -m pip install -r backend/requirements.txt -r qa/voice_pipeline/requirements.txt
+          python -m playwright install --with-deps chromium
+      - name: Build the deterministic test audio
+        run: python qa/voice_pipeline/create_fixture.py
+      - name: Install Flutter packages and start web app
+        run: |
+          cd frontend
+          flutter pub get
+          flutter run -d web-server --web-hostname 127.0.0.1 --web-port 5174 > "$RUNNER_TEMP/flutter-web.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/flutter-web.pid"
+      - name: Wait for Flutter Web
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --silent --fail http://127.0.0.1:5174/ > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/flutter-web.log"
+          exit 1
+      - name: Run Playwright browser-to-backend tests
+        run: python -m pytest -c qa/voice_pipeline/pytest.ini qa/voice_pipeline/tests
+      - name: Start isolated backend for Artillery
+        run: |
+          mkdir -p "$RUNNER_TEMP/voice-pipeline/audio"
+          cd backend
+          python -m uvicorn app:app --host 127.0.0.1 --port 8003 --no-access-log > "$RUNNER_TEMP/qa-backend.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/qa-backend.pid"
+      - name: Wait for isolated backend
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:8003/health > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/qa-backend.log"
+          exit 1
+      - name: Run bounded Artillery smoke
+        run: npx --yes artillery@2.0.25 run qa/voice_pipeline/artillery/smoke.yml
+      - name: Stop test-owned servers
+        if: always()
+        run: |
+          for pid_file in "$RUNNER_TEMP/qa-backend.pid" "$RUNNER_TEMP/flutter-web.pid"; do
+            if [ -f "$pid_file" ]; then kill "$(cat "$pid_file")" 2>/dev/null || true; fi
+          done

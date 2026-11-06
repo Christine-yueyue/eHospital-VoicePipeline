@@ -6,11 +6,12 @@ import re
 import sqlite3
 import time
 import uuid
+from typing import Literal
 
 import httpx
 from fastapi import APIRouter, HTTPException
 from openai import AsyncOpenAI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 import voice_feedback
 from whatsapp_templates import check_meta_response, template_payload, template_preview, verify_template
@@ -99,6 +100,9 @@ def create_contact(name: str, phone: str, *, language='en', consent='unknown', c
         raise HTTPException(400, 'Enter a contact name of 1 to 100 characters.')
     if language not in {'en', 'fr'} or consent not in {'unknown', 'granted', 'revoked'}:
         raise HTTPException(400, 'Choose a supported language and contact permission status.')
+    consent_source = consent_source.strip()
+    if consent == 'granted' and not consent_source:
+        raise HTTPException(400, 'Record where contact permission was obtained.')
     wa_id = _digits(phone)
     now = time.time()
     identifier = str(uuid.uuid4())
@@ -169,6 +173,20 @@ class ContactInput(BaseModel):
 class AssistantInput(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     history: list[dict[str, str]] = Field(default_factory=list, max_length=8)
+
+
+class AssistantIntent(BaseModel):
+    """Validate model output locally; a provider schema is not authorization."""
+    model_config = ConfigDict(extra='forbid', strict=True)
+    intent: Literal['create_contact', 'update_contact', 'create_followup',
+                    'list_tasks', 'list_contacts', 'complete_task', 'clarify']
+    reply: str = Field(max_length=2000)
+    contact_name: str | None = Field(max_length=100)
+    phone: str | None = Field(max_length=24)
+    language: Literal['en', 'fr']
+    consent: Literal['unknown', 'granted', 'revoked']
+    consent_source: str | None = Field(max_length=240)
+    title: str | None = Field(max_length=160)
 
 
 class TaskAction(BaseModel):
@@ -275,7 +293,7 @@ async def assistant_message(turn: AssistantInput):
                 instructions=prompt, input=[*history, {'role':'user','content':turn.message}],
                 text={'format':{'type':'json_schema','name':'whatsapp_followup_intent',
                                 'strict':True,'schema':schema}}, store=False)
-        intent = json.loads(result.output_text)
+        intent = AssistantIntent.model_validate_json(result.output_text).model_dump()
     except Exception:
         raise HTTPException(503, 'The assistant could not understand this request. Try again or use the WhatsApp inbox.') from None
 
@@ -291,34 +309,21 @@ async def assistant_message(turn: AssistantInput):
         if not name or not phone:
             reply = 'Please provide the contact name and WhatsApp number with its country code.'
         else:
-            consent=intent['consent']
-            source=(intent.get('consent_source') or '').strip()[:240]
-            if consent=='granted' and not source:
-                consent='unknown'
+            # Model text and client-supplied history are untrusted. Permission
+            # must be recorded separately by the authenticated operator.
             contact = create_contact(name, phone, language=intent['language'],
-                                     consent=consent, consent_source=source)
+                                     consent='unknown', consent_source='')
             action = {'type':'contact_created','item':contact}
-            if contact['consent'] != 'granted':
-                reply += ' The contact was saved, but permission to message them has not been confirmed, so I cannot send an invitation.'
+            reply = 'The contact was saved with permission unknown. Review the contact and record their permission before preparing an invitation.'
     elif kind == 'update_contact':
         contact_name = intent.get('contact_name')
-        consent = intent['consent']
         contact, matches = _find_contact(contact_name or '')
         if not contact:
             action = {'type':'contact_choices','items':matches}
             reply = 'Which contact would you like to update?' if matches else 'I could not find that contact. Provide their name or add them first.'
-        elif consent == 'unknown':
-            reply = 'Choose the permission status to record: agreed or opted out.'
         else:
-            source = (intent.get('consent_source') or '').strip()[:240]
-            if consent == 'granted' and not source:
-                reply = 'Provide the source of the WhatsApp permission before I record it as granted.'
-            else:
-                with _database() as db:
-                    db.execute('UPDATE wa_contacts SET consent=?,consent_source=?,updated=? WHERE id=?',
-                        (consent, source or 'Updated at the contact’s request', time.time(), contact['id']))
-                action = {'type':'contact_updated','item':{**contact,'consent':consent,'consent_source':source}}
-                reply = 'The contact permission status has been recorded.'
+            action = {'type':'consent_confirmation','item':contact}
+            reply = 'Review this contact and record their permission below. No permission change has been saved.'
     elif kind == 'create_followup':
         contact_name, title = intent.get('contact_name'), intent.get('title')
         if not contact_name or not title:

@@ -45,6 +45,11 @@ def closed_error(exc: ConnectionClosed) -> str:
     return "Could not connect to live translation. Check the backend connection, API billing and model access."
 
 
+def client_metadata(value: str | None) -> str | None:
+    value = (value or '').strip()
+    return value[:100] or None
+
+
 async def _wait_for_session_update(upstream) -> None:
     """Wait until a newly opened provider session accepts its configuration."""
     async with asyncio.timeout(15):
@@ -57,7 +62,11 @@ async def _wait_for_session_update(upstream) -> None:
 
 
 async def relay(websocket: WebSocket, translation_upstream, transcription_upstream,
-                target_language: str = 'fr') -> None:
+                target_language: str = 'fr', client_platform: str | None = None,
+                client_os_version: str | None = None,
+                client_app_version: str | None = None,
+                client_device_model: str | None = None,
+                client_is_simulator: bool | None = None) -> None:
     """Relay one microphone stream to translation and source-transcription sessions."""
     stop_requested = asyncio.Event()
     final_transcript = ''
@@ -91,6 +100,8 @@ async def relay(websocket: WebSocket, translation_upstream, transcription_upstre
                 await translation_upstream.send(audio_event(chunk))
                 await transcription_upstream.send(transcription_audio_event(chunk))
             elif message.get("text"):
+                if len(message['text'].encode('utf-8')) > 256:
+                    raise HTTPException(400, "Live audio control message is too large.")
                 try:
                     control = json.loads(message["text"])
                 except (ValueError, TypeError):
@@ -170,6 +181,8 @@ async def relay(websocket: WebSocket, translation_upstream, transcription_upstre
                     final_transcript.strip(),
                     (translated_text or final_transcript).strip(),
                     target_language,
+                    client_platform, client_os_version, client_app_version,
+                    client_device_model, client_is_simulator,
                 )
             await websocket.send_json({"type": "done"})
         else:
@@ -198,6 +211,14 @@ async def live(websocket: WebSocket):
     try:
         target = websocket.query_params.get("target_language", "fr")
         check_target(target)
+        client_platform = client_metadata(websocket.query_params.get("client_platform"))
+        client_os_version = client_metadata(websocket.query_params.get("client_os_version"))
+        client_app_version = client_metadata(websocket.query_params.get("client_app_version"))
+        client_device_model = client_metadata(websocket.query_params.get("client_device_model"))
+        simulator_value = websocket.query_params.get("client_is_simulator", "")
+        if simulator_value not in {"", "true", "false"}:
+            raise HTTPException(400, "Invalid simulator metadata.")
+        client_is_simulator = simulator_value == "true" if simulator_value else None
         key = api_key()
         query = urlencode({"model": os.getenv("REALTIME_TRANSLATION_MODEL", "gpt-realtime-translate")})
         async with asyncio.timeout(MAX_SESSION_SECONDS):
@@ -241,7 +262,9 @@ async def live(websocket: WebSocket):
                     }))
                     await _wait_for_session_update(transcription_upstream)
                     await websocket.send_json({"type": "ready", "sample_rate": 24000})
-                    await relay(websocket, upstream, transcription_upstream, target)
+                    await relay(websocket, upstream, transcription_upstream, target,
+                                client_platform, client_os_version, client_app_version,
+                                client_device_model, client_is_simulator)
     except WebSocketDisconnect:
         pass
     except HTTPException as exc:

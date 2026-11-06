@@ -52,7 +52,7 @@ python ../scripts/init_env.py
 | `WHATSAPP_FOLLOWUP_TEMPLATE_NAME` | Exact name of your approved Meta message template | Confirmed outbound invitations in the floating WhatsApp assistant |
 | `ASSISTANT_MODEL` | Defaults to `gpt-4.1-mini` | Understands assistant requests; uses the same server-side OpenAI key |
 
-For the first local app connection, set `OPENAI_API_KEY`; the WhatsApp fields can be filled later. `TRANSCRIPTION_MODEL`, `TRANSLATION_MODEL`, and `ASSISTANT_MODEL` have defaults in `.env.example`. Check that the selected models are available to your OpenAI project. If the web frontend uses a different origin than the default local port 5174, add that exact origin to `ALLOWED_ORIGINS` in `.env`.
+For the first local app connection, set `OPENAI_API_KEY`; the WhatsApp fields can be filled later. `TRANSCRIPTION_MODEL`, `TRANSLATION_MODEL`, and `ASSISTANT_MODEL` have defaults in `.env.example`. Check that the selected models are available to your OpenAI project. HTTP Flutter development origins on `localhost` or `127.0.0.1` are accepted on any port, including when `ALLOWED_ORIGINS` is set. Keep `ALLOWED_ORIGINS` configured with the exact HTTPS frontend origins for production; the local exception does not allow other hosts or schemes.
 
 Start FastAPI **from `backend/`**:
 

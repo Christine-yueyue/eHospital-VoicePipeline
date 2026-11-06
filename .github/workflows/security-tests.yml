@@ -1,0 +1,54 @@
+name: Security regression tests
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install test dependencies and optional audio decoder
+        run: |
+          python -m pip install -r backend/requirements-dev.txt
+          if timeout --signal=TERM 3m sudo apt-get update -o Acquire::Retries=2; then
+            timeout --signal=TERM 3m sudo apt-get install --yes ffmpeg || \
+              echo "ffmpeg installation failed; decoder-dependent tests will be skipped."
+          else
+            echo "apt metadata refresh timed out; decoder-dependent tests will be skipped."
+          fi
+      - name: Run offline backend and security regressions
+        working-directory: backend
+        env:
+          PYTHON_DOTENV_DISABLED: '1'
+        run: python -m pytest -q
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Audit resolved backend dependencies
+        run: |
+          python -m pip install 'pip-audit>=2.9,<3'
+          python -m pip_audit -r backend/requirements.txt

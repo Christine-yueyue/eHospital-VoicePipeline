@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:record/record.dart';
@@ -39,6 +40,9 @@ class VoiceController extends ChangeNotifier {
   int _session = 0;
   int _audioBytesSent = 0;
   bool _disposed = false;
+  StreamSubscription<Uint8List>? _assistantAudio;
+  Completer<void>? _assistantAudioDone;
+  final List<int> _assistantPcm = [];
 
   VoiceState state = VoiceState.idle;
   String targetLanguage = 'fr';
@@ -107,6 +111,41 @@ class VoiceController extends ChangeNotifier {
   Uri _url(String path) => Uri.parse(baseUrl).resolve(path);
 
   Map<String, String> get _headers => {'Authorization': 'Bearer $_accessToken'};
+
+  Future<Map<String, String>> _clientMetadata() async {
+    final metadata = <String, String>{
+      'client_platform': kIsWeb
+          ? 'web'
+          : defaultTargetPlatform.name.toLowerCase(),
+      'client_app_version': '3.0.0+1',
+    };
+    final deviceInfo = DeviceInfoPlugin();
+    if (kIsWeb) {
+      final info = await deviceInfo.webBrowserInfo;
+      metadata['client_os_version'] = info.platform ?? '';
+      return metadata;
+    }
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.iOS:
+        final info = await deviceInfo.iosInfo;
+        metadata['client_os_version'] = info.systemVersion;
+        metadata['client_device_model'] = info.model;
+        metadata['client_is_simulator'] = (!info.isPhysicalDevice).toString();
+      case TargetPlatform.android:
+        final info = await deviceInfo.androidInfo;
+        metadata['client_os_version'] = info.version.release;
+        metadata['client_device_model'] = '${info.manufacturer} ${info.model}'
+            .trim();
+        metadata['client_is_simulator'] = (!info.isPhysicalDevice).toString();
+      case TargetPlatform.macOS:
+        final info = await deviceInfo.macOsInfo;
+        metadata['client_os_version'] = info.osRelease;
+        metadata['client_device_model'] = info.model;
+      default:
+        break;
+    }
+    return metadata..removeWhere((key, value) => value.isEmpty);
+  }
 
   static String? validateAddress(String address) {
     final uri = Uri.tryParse(address.trim());
@@ -235,10 +274,153 @@ class VoiceController extends ChangeNotifier {
         .timeout(const Duration(seconds: 60)),
   );
 
+  Future<void> startAssistantRecording() async {
+    if (!connected || busy || await _recorder.isRecording()) {
+      throw const FormatException('The microphone is currently in use.');
+    }
+    if (!await _recorder.hasPermission()) {
+      throw const FormatException('Microphone permission was denied.');
+    }
+    _assistantPcm.clear();
+    final stream = await _recorder.startStream(
+      const RecordConfig(
+        encoder: AudioEncoder.pcm16bits,
+        sampleRate: 24000,
+        numChannels: 1,
+        autoGain: true,
+        echoCancel: true,
+        noiseSuppress: true,
+      ),
+    );
+    final done = Completer<void>();
+    _assistantAudioDone = done;
+    _assistantAudio = stream.listen(
+      _assistantPcm.addAll,
+      onDone: () {
+        if (!done.isCompleted) done.complete();
+      },
+      onError: (Object error, StackTrace stack) {
+        if (!done.isCompleted) done.completeError(error, stack);
+      },
+    );
+  }
+
+  Future<Uint8List> stopAssistantRecording() async {
+    await _recorder.stop();
+    await _assistantAudioDone?.future.timeout(const Duration(seconds: 5));
+    await _assistantAudio?.cancel();
+    _assistantAudio = null;
+    _assistantAudioDone = null;
+    final pcm = Uint8List.fromList(_assistantPcm);
+    _assistantPcm.clear();
+    if (pcm.isEmpty) throw const FormatException('The recording is empty.');
+    final header = ByteData(44)
+      ..setUint8(0, 82)
+      ..setUint8(1, 73)
+      ..setUint8(2, 70)
+      ..setUint8(3, 70)
+      ..setUint32(4, pcm.length + 36, Endian.little)
+      ..setUint8(8, 87)
+      ..setUint8(9, 65)
+      ..setUint8(10, 86)
+      ..setUint8(11, 69)
+      ..setUint8(12, 102)
+      ..setUint8(13, 109)
+      ..setUint8(14, 116)
+      ..setUint8(15, 32)
+      ..setUint32(16, 16, Endian.little)
+      ..setUint16(20, 1, Endian.little)
+      ..setUint16(22, 1, Endian.little)
+      ..setUint32(24, 24000, Endian.little)
+      ..setUint32(28, 48000, Endian.little)
+      ..setUint16(32, 2, Endian.little)
+      ..setUint16(34, 16, Endian.little)
+      ..setUint8(36, 100)
+      ..setUint8(37, 97)
+      ..setUint8(38, 116)
+      ..setUint8(39, 97)
+      ..setUint32(40, pcm.length, Endian.little);
+    return Uint8List.fromList([...header.buffer.asUint8List(), ...pcm]);
+  }
+
+  Future<void> cancelAssistantRecording() async {
+    await _assistantAudio?.cancel();
+    _assistantAudio = null;
+    _assistantAudioDone = null;
+    if (await _recorder.isRecording()) await _recorder.cancel();
+    _assistantPcm.clear();
+  }
+
+  Future<String> transcribeAssistantRecording(Uint8List wav) async {
+    final request =
+        http.MultipartRequest('POST', _url('/api/assistant/transcribe'))
+          ..headers.addAll(_headers)
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'file',
+              wav,
+              filename: 'recording.wav',
+            ),
+          );
+    final response = await _http
+        .send(request)
+        .then(http.Response.fromStream)
+        .timeout(const Duration(seconds: 90));
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode != 200 || body['success'] != true) {
+      throw FormatException(
+        body['error'] as String? ?? 'Transcription failed.',
+      );
+    }
+    return body['transcript'] as String? ?? '';
+  }
+
   Future<Map<String, dynamic>> assistantActivity() async => _responseBody(
     await _http
         .get(_url('/api/whatsapp/assistant/activity'), headers: _headers)
         .timeout(const Duration(seconds: 15)),
+  );
+
+  Future<List<Map<String, dynamic>>> approvedScheduleTemplates() async {
+    final body = _responseBody(
+      await _http
+          .get(_url('/api/whatsapp/schedules/templates'), headers: _headers)
+          .timeout(const Duration(seconds: 20)),
+    );
+    return (body['templates'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> scheduledMessages() async {
+    final body = _responseBody(
+      await _http
+          .get(_url('/api/whatsapp/schedules'), headers: _headers)
+          .timeout(const Duration(seconds: 15)),
+    );
+    return (body['schedules'] as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> createScheduledMessage({
+    required List<String> recipients,
+    required String templateName,
+    required String templateLanguage,
+    required List<String> templateParameters,
+    required String scheduledTime,
+    String timezone = 'America/Toronto',
+  }) async => _responseBody(
+    await _http
+        .post(
+          _url('/api/whatsapp/schedules'),
+          headers: {..._headers, 'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'recipients': recipients,
+            'template_name': templateName,
+            'template_language': templateLanguage,
+            'template_parameters': templateParameters,
+            'scheduled_time': scheduledTime,
+            'timezone': timezone,
+          }),
+        )
+        .timeout(const Duration(seconds: 30)),
   );
 
   Future<void> sendFollowup(String taskId) async => _responseBody(
@@ -249,6 +431,24 @@ class VoiceController extends ChangeNotifier {
           body: jsonEncode({'task_id': taskId}),
         )
         .timeout(const Duration(seconds: 45)),
+  );
+
+  Future<void> recordContactConsent(
+    String contactId,
+    String consent,
+    String source,
+  ) async => _responseBody(
+    await _http
+        .post(
+          _url('/api/whatsapp/contacts/consent'),
+          headers: {..._headers, 'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'id': contactId,
+            'consent': consent,
+            'source': source,
+          }),
+        )
+        .timeout(const Duration(seconds: 15)),
   );
 
   Future<void> completeFollowup(String taskId) async => _responseBody(
@@ -340,6 +540,7 @@ class VoiceController extends ChangeNotifier {
         ..files.add(
           http.MultipartFile.fromBytes('file', _fileBytes!, filename: filename),
         );
+      request.fields.addAll(await _clientMetadata());
       final response = await _http
           .send(request)
           .then(http.Response.fromStream)
@@ -387,7 +588,10 @@ class VoiceController extends ChangeNotifier {
       if (_disposed || current != _session) return;
       final uri = _url('/api/live').replace(
         scheme: Uri.parse(baseUrl).scheme == 'https' ? 'wss' : 'ws',
-        queryParameters: {'target_language': targetLanguage},
+        queryParameters: {
+          'target_language': targetLanguage,
+          ...await _clientMetadata(),
+        },
       );
       final channel = WebSocketChannel.connect(uri);
       _channel = channel;

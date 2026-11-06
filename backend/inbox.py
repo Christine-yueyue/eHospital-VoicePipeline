@@ -17,7 +17,9 @@ MAX_PENDING = 100
 @contextmanager
 def database():
     path = Path(os.getenv("INBOX_DB_PATH", str(Path(__file__).parent / "data/inbox.sqlite3")))
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path.touch(mode=0o600, exist_ok=True)
+    path.chmod(0o600)
     db = sqlite3.connect(path, timeout=5)
     try:
         db.row_factory = sqlite3.Row
@@ -144,6 +146,6 @@ def retry_message(message_id: str):
 
 def delete_message(message_id: str):
     with database() as db:
-        db.execute("""UPDATE messages SET status='deleted', media_id='', sender='',
+        db.execute("""UPDATE messages SET status='deleted', media_id='', sender='', audio_path=NULL,
             transcript='', translation='', error='' WHERE id=?""", (message_id,))
         db.commit()

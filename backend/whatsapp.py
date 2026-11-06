@@ -71,7 +71,9 @@ async def verify(request: Request):
     challenge = params.get('hub.challenge', '')
     if not challenge or len(challenge) > 256:
         raise HTTPException(400, 'Missing or invalid challenge.')
-    return challenge
+    return PlainTextResponse(challenge, headers={'Cache-Control': 'no-store',
+                                                'Referrer-Policy': 'no-referrer',
+                                                'X-Content-Type-Options': 'nosniff'})
 
 
 def audio_events(payload: dict) -> list[dict]:

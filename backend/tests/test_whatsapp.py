@@ -397,6 +397,37 @@ def test_cors_allows_app_auth_header(client):
     assert response.headers['access-control-allow-origin'] == 'http://localhost:5173'
 
 
+@pytest.mark.parametrize('origin', [
+    'http://localhost:5174',
+    'http://127.0.0.1:5174',
+    'http://localhost:60406',
+    'http://127.0.0.1:60406',
+])
+def test_cors_preflight_allows_flutter_web_loopback_origins(client, origin):
+    response = client.options('/api/config', headers={
+        'Origin': origin,
+        'Access-Control-Request-Method': 'GET',
+        'Access-Control-Request-Headers': 'authorization,content-type',
+    })
+
+    assert response.status_code == 200
+    assert response.headers['access-control-allow-origin'] == origin
+    assert {'GET', 'POST'} <= set(response.headers['access-control-allow-methods'].split(', '))
+    allowed_headers = {value.lower() for value in response.headers['access-control-allow-headers'].split(', ')}
+    assert {'authorization', 'content-type'} <= allowed_headers
+
+
+def test_cors_preflight_still_rejects_unconfigured_public_origin(client):
+    response = client.options('/api/config', headers={
+        'Origin': 'https://unrelated.example',
+        'Access-Control-Request-Method': 'GET',
+        'Access-Control-Request-Headers': 'authorization',
+    })
+
+    assert response.status_code == 400
+    assert 'access-control-allow-origin' not in response.headers
+
+
 def test_no_provider_secrets_in_config(client, configured):
     response = client.get('/api/config')
     for key in ('OPENAI_API_KEY', 'WHATSAPP_APP_SECRET', 'WHATSAPP_ACCESS_TOKEN', 'APP_ACCESS_TOKEN'):
@@ -405,7 +436,10 @@ def test_no_provider_secrets_in_config(client, configured):
 
 
 @pytest.mark.parametrize('url', ['http://lookaside.fbsbx.com/a', 'https://evil.example/a',
-    'https://lookaside.fbsbx.com.evil.example/a', 'https://lookaside.fbsbx.com:444/a'])
+    'https://lookaside.fbsbx.com.evil.example/a', 'https://lookaside.fbsbx.com:444/a',
+    'https://127.0.0.1/a', 'https://169.254.169.254/latest/meta-data',
+    'https://metadata.google.internal/a', 'https://fbcdn.net.evil.example/a',
+    'https://user:password@lookaside.fbsbx.com/a', 'file:///etc/passwd'])
 def test_download_rejects_untrusted_urls(configured, monkeypatch, tmp_path, url):
     requests = []
     real_client = httpx.AsyncClient

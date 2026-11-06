@@ -1,0 +1,22 @@
+config:
+  target: "http://127.0.0.1:8003"
+  phases:
+    - duration: 10
+      arrivalRate: 1
+      maxVusers: 2
+  defaults:
+    headers:
+      Authorization: "Bearer {{ $processEnvironment.APP_ACCESS_TOKEN }}"
+  plugins:
+    expect: {}
+scenarios:
+  - name: Read-only backend smoke
+    flow:
+      - get:
+          url: /health
+          expect:
+            - statusCode: 200
+      - get:
+          url: /api/config
+          expect:
+            - statusCode: 200
