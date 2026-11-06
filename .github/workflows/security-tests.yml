@@ -23,11 +23,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install test dependencies and audio decoder
+      - name: Install test dependencies and optional audio decoder
         run: |
           python -m pip install -r backend/requirements-dev.txt
-          sudo apt-get update
-          sudo apt-get install --yes ffmpeg
+          if timeout --signal=TERM 3m sudo apt-get update -o Acquire::Retries=2; then
+            timeout --signal=TERM 3m sudo apt-get install --yes ffmpeg || \
+              echo "ffmpeg installation failed; decoder-dependent tests will be skipped."
+          else
+            echo "apt metadata refresh timed out; decoder-dependent tests will be skipped."
+          fi
       - name: Run offline backend and security regressions
         working-directory: backend
         env:
