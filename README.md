@@ -46,7 +46,7 @@ flutter pub get
 flutter run -d web-server --web-hostname 127.0.0.1 --web-port 5174
 ```
 
-Open `http://127.0.0.1:5174`. In **Connection settings**, enter `http://127.0.0.1:8003` and the `APP_ACCESS_TOKEN` from your private `backend/.env`. Check `http://127.0.0.1:8003/health` if the app cannot connect. Upload and live microphone features need the OpenAI key; receiving real WhatsApp voice notes additionally needs the Meta configuration and a public HTTPS callback. Stop each program with Ctrl+C in its terminal.
+Open `http://127.0.0.1:5174`. In **Connection settings**, enter `http://127.0.0.1:8003` and the `APP_ACCESS_TOKEN` from your private `backend/.env`. For the deployed backend, the app defaults to `https://ehospitalbackend.com/voice`; the `/voice` path is supported and preserved for API and WebSocket requests. Check `http://127.0.0.1:8003/health` if the local app cannot connect. Upload and live microphone features need the OpenAI key; receiving real WhatsApp voice notes additionally needs the Meta configuration and a public HTTPS callback. Stop each program with Ctrl+C in its terminal.
 
 ## Local backend setup
 
@@ -103,7 +103,7 @@ flutter pub get
 flutter run -d chrome --web-port 5174
 ```
 
-If Chrome is not available as a Flutter device, use `flutter run -d web-server --web-port 5174 --web-hostname 127.0.0.1` and open `http://127.0.0.1:5174` in a browser. In **Connection settings**, enter `http://127.0.0.1:8003` and the local `APP_ACCESS_TOKEN` from `backend/.env`. The token is held in memory for this prototype and cleared when you disconnect or close the app. Release builds require an HTTPS backend.
+If Chrome is not available as a Flutter device, use `flutter run -d web-server --web-port 5174 --web-hostname 127.0.0.1` and open `http://127.0.0.1:5174` in a browser. In **Connection settings**, the default server address is `https://ehospitalbackend.com/voice`; use `http://127.0.0.1:8003` and the local `APP_ACCESS_TOKEN` from `backend/.env` for local development. The token is held in memory for this prototype and cleared when you disconnect or close the app. Release builds require an HTTPS backend.
 
 On a physical iPhone during a debug run, start the backend with `--host 0.0.0.0` on a trusted private LAN and use the Mac's private LAN address in the app, for example `http://192.168.1.20:8003`. Keep the phone and Mac on the same Wi-Fi network and allow incoming connections to Python when macOS asks. `127.0.0.1` on a physical iPhone means the iPhone itself, not the Mac.
 

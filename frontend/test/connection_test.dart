@@ -19,17 +19,33 @@ void main() {
       VoiceController.validateAddress('https://voice.example.com'),
       isNull,
     );
+    expect(
+      VoiceController.validateAddress('https://ehospitalbackend.com/voice'),
+      isNull,
+    );
     expect(VoiceController.validateAddress('http://127.0.0.1:8000'), isNull);
     expect(VoiceController.validateAddress('http://192.168.1.20:8003'), isNull);
     for (final address in [
       'http://public.example.com',
       'https://user:pass@voice.example.com',
-      'https://voice.example.com/api',
       'https://voice.example.com?token=secret',
       'bad address',
     ]) {
       expect(VoiceController.validateAddress(address), isNotNull);
     }
+  });
+
+  testWidgets('Uses the deployed backend as the default server address', (
+    tester,
+  ) async {
+    final controller = VoiceController(
+      client: MockClient((_) async {
+        return http.Response('{}', 200);
+      }),
+    );
+    expect(controller.baseUrl, VoiceController.defaultBackendUrl);
+    controller.dispose();
+    await tester.pumpAndSettle();
   });
 
   testWidgets(
@@ -63,6 +79,31 @@ void main() {
       await tester.pumpAndSettle();
     },
   );
+
+  testWidgets('Preserves a deployed backend path in API requests', (
+    tester,
+  ) async {
+    final requests = <http.Request>[];
+    final controller = VoiceController(
+      client: MockClient((request) async {
+        requests.add(request);
+        return http.Response(jsonEncode(config), 200);
+      }),
+    );
+    expect(
+      await controller.connectToBackend(
+        'https://ehospitalbackend.com/voice',
+        'app-secret',
+      ),
+      isTrue,
+    );
+    expect(
+      requests.single.url.toString(),
+      'https://ehospitalbackend.com/voice/api/config',
+    );
+    controller.dispose();
+    await tester.pumpAndSettle();
+  });
 
   testWidgets('Wrong token leaves app disconnected and shows a useful error', (
     tester,

@@ -32,7 +32,7 @@ Wait until the professor's server and production database are ready, then deploy
    ```bash
    cd frontend
    flutter build ipa --release \
-     --dart-define=API_BASE_URL=https://<domain>
+      --dart-define=API_BASE_URL=https://<domain>/voice
    ```
 
 9. Upload the archive to App Store Connect/TestFlight and invite the required Apple IDs.

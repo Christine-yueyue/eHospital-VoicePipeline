@@ -12,12 +12,14 @@ import 'app_strings.dart';
 enum VoiceState { idle, uploading, connecting, listening, finishing }
 
 class VoiceController extends ChangeNotifier {
+  static const defaultBackendUrl = 'https://ehospitalbackend.com/voice';
+
   VoiceController({String? backendUrl, http.Client? client})
     : baseUrl =
           backendUrl ??
           const String.fromEnvironment(
             'API_BASE_URL',
-            defaultValue: 'http://127.0.0.1:8003',
+            defaultValue: defaultBackendUrl,
           ),
       _http = client ?? http.Client();
 
@@ -108,7 +110,12 @@ class VoiceController extends ChangeNotifier {
     _notify();
   }
 
-  Uri _url(String path) => Uri.parse(baseUrl).resolve(path);
+  Uri _url(String path, {String? address}) {
+    final base = Uri.parse(address ?? baseUrl);
+    final basePath = base.path.endsWith('/') ? base.path : '${base.path}/';
+    final relativePath = path.startsWith('/') ? path.substring(1) : path;
+    return base.replace(path: '$basePath$relativePath');
+  }
 
   Map<String, String> get _headers => {'Authorization': 'Bearer $_accessToken'};
 
@@ -153,8 +160,7 @@ class VoiceController extends ChangeNotifier {
         uri.host.isEmpty ||
         uri.userInfo.isNotEmpty ||
         uri.hasQuery ||
-        uri.hasFragment ||
-        (uri.path != '' && uri.path != '/')) {
+        uri.hasFragment) {
       return 'Enter a server address such as https://voice.example.com.';
     }
     final local =
@@ -195,7 +201,7 @@ class VoiceController extends ChangeNotifier {
     try {
       final response = await _http
           .get(
-            Uri.parse(address.trim()).resolve('/api/config'),
+            _url('/api/config', address: address.trim()),
             headers: {'Authorization': 'Bearer ${accessToken.trim()}'},
           )
           .timeout(const Duration(seconds: 10));
