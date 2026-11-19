@@ -90,7 +90,7 @@ def test_upload_limit(client, monkeypatch):
 
 
 def test_invalid_target(client):
-    assert client.post("/api/transcribe", files={"file": ("a.wav", b"sample")}, data={"target_language": "zh"}).status_code == 400
+    assert client.post("/api/transcribe", files={"file": ("a.wav", b"sample")}, data={"target_language": "xx"}).status_code == 400
 
 
 def test_translation_failure_keeps_transcript(client, monkeypatch):
@@ -323,7 +323,7 @@ def test_live_provider_error_is_sanitized(client, upstream):
         await upstream.translation.events.put({"type": "error", "error": {"code": "bad", "message": "private diagnostic"}})
 
     upstream.translation.send = fail_send
-    with client.websocket_connect("/api/live") as ws:
+    with client.websocket_connect("/api/live?target_language=fr", headers={"origin": "http://localhost:5173"}) as ws:
         message = ws.receive_json()
         assert message["type"] == "error"
         assert "private diagnostic" not in message["message"]
@@ -334,7 +334,7 @@ def test_live_invalid_api_key_is_actionable(client, upstream):
         await upstream.translation.events.put({"type": "error", "error": {"code": "invalid_api_key"}})
 
     upstream.translation.send = fail_send
-    with client.websocket_connect("/api/live") as ws:
+    with client.websocket_connect("/api/live?target_language=fr", headers={"origin": "http://localhost:5173"}) as ws:
         message = ws.receive_json()
         assert message["type"] == "error"
         assert "OPENAI_API_KEY" in message["message"]
@@ -342,5 +342,15 @@ def test_live_invalid_api_key_is_actionable(client, upstream):
 
 def test_config_does_not_leak_key(client):
     response = client.get("/api/config")
-    assert response.json()["languages"] == {"en": "English", "fr": "French"}
+    assert response.json()["languages"] == {
+        "en": "English",
+        "fr": "French",
+        "es": "Spanish",
+        "zh": "Chinese",
+        "ar": "Arabic",
+        "pt": "Portuguese",
+        "de": "German",
+        "ja": "Japanese",
+        "ko": "Korean",
+    }
     assert "test-key-not-real" not in response.text

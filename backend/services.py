@@ -13,7 +13,18 @@ from openai import (
     RateLimitError, UnprocessableEntityError,
 )
 
-LANGUAGES = {"en": "English", "fr": "French"}
+LANGUAGES = {
+    "en": "English",
+    "fr": "French",
+    "es": "Spanish",
+    "zh": "Chinese",
+    "ar": "Arabic",
+    "pt": "Portuguese",
+    "de": "German",
+    "ja": "Japanese",
+    "ko": "Korean",
+}
+SOURCE_LANGUAGES = {"en": "English", "fr": "French"}
 
 
 def api_key() -> str:
@@ -25,7 +36,12 @@ def api_key() -> str:
 
 def check_target(target: str) -> None:
     if target not in LANGUAGES:
-        raise HTTPException(400, "Choose English or French as the target language.")
+        raise HTTPException(400, "Choose a supported target language.")
+
+
+def check_source_language(source: str) -> None:
+    if source not in SOURCE_LANGUAGES:
+        raise HTTPException(400, "Choose English or French as the original language.")
 
 
 @asynccontextmanager
@@ -75,7 +91,7 @@ async def ogg_to_wav(source: Path, destination: Path) -> None:
         raise HTTPException(413, "The decoded recording is too long. Upload a shorter voice note.")
 
 
-async def transcribe_audio(file_path: str) -> str:
+async def transcribe_audio(file_path: str, language: str | None = None) -> str:
     async with provider() as client:
         with TemporaryDirectory(prefix="voice-decode-") as work:
             path = Path(file_path)
@@ -87,9 +103,12 @@ async def transcribe_audio(file_path: str) -> str:
                     raise HTTPException(504, "Audio conversion timed out. Try a shorter recording.") from None
                 path = converted
             with path.open("rb") as audio:
+                options = {}
+                if language:
+                    options['language'] = language
                 result = await client.audio.transcriptions.create(
                     model=os.getenv("TRANSCRIPTION_MODEL", "gpt-4o-mini-transcribe"),
-                    file=audio, response_format="json",
+                    file=audio, response_format="json", **options,
                 )
     text = result.text.strip()
     if not text:

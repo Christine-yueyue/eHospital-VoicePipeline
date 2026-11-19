@@ -20,11 +20,21 @@ class AppStrings {
       'Upload a voice note or speak into your microphone. Read the original words alongside their translation.':
           'Importez un mémo vocal ou parlez dans votre microphone. Lisez les mots originaux avec leur traduction.',
       'Translate into': 'Traduire en',
+      'Original language': 'Langue d’origine',
+      'Do not translate': 'Ne pas traduire',
+      'Translation': 'Traduction',
+      'Translating transcript…': 'Traduction de la transcription…',
+      'Translation took too long. Try again.':
+          'La traduction a pris trop de temps. Réessayez.',
+      'Could not translate this transcript. Check the connection and try again.':
+          'Impossible de traduire cette transcription. Vérifiez la connexion et réessayez.',
+      'Transcribing your file…': 'Transcription du fichier…',
+      'Connecting to live captions…': 'Connexion à la transcription en direct…',
       'French / Français': 'Français',
       'English': 'Anglais',
       'French': 'Français',
-      'English and French input · language detected automatically':
-          'Entrée en anglais ou en français · langue détectée automatiquement',
+      'Choose English or French to guide transcription.':
+          'Choisissez l’anglais ou le français pour guider la transcription.',
       'Upload a voice note': 'Importer un mémo vocal',
       'WhatsApp .ogg / .opus, MP3, WAV, M4A or WebM. Up to {size} MB.':
           'WhatsApp .ogg / .opus, MP3, WAV, M4A ou WebM. Jusqu’à {size} Mo.',
@@ -38,8 +48,8 @@ class AppStrings {
           'Autorisez l’accès au microphone, puis parlez en anglais ou en français. Le texte apparaît pendant que vous parlez.',
       'Stop & finish': 'Arrêter et terminer',
       'Start speaking': 'Commencer à parler',
-      'Live translated text · up to 10 minutes per session\nSmall delays are normal. Keep this page open.':
-          'Traduction en direct · jusqu’à 10 minutes par session\nUn léger délai est normal. Gardez cette page ouverte.',
+      'Live captions and optional translation · up to 10 minutes per session\nSmall delays are normal. Keep this page open.':
+          'Transcription en direct et traduction facultative · jusqu’à 10 minutes par session\nUn léger délai est normal. Gardez cette page ouverte.',
       'Original transcript': 'Transcription originale',
       '{language} translation': 'Traduction en {language}',
       'Your original words will appear here.':
@@ -77,26 +87,36 @@ class AppStrings {
       'Close': 'Fermer',
       'Refresh scheduled messages': 'Actualiser les messages programmés',
       'Contacts with recorded permission': 'Contacts ayant donné leur accord',
-      'No contacts with recorded permission are available.': 'Aucun contact ayant donné son accord n’est disponible.',
+      'No contacts with recorded permission are available.':
+          'Aucun contact ayant donné son accord n’est disponible.',
       'Approved template': 'Modèle approuvé',
-      'No supported approved templates were returned by Meta.': 'Meta n’a renvoyé aucun modèle approuvé compatible.',
+      'No supported approved templates were returned by Meta.':
+          'Meta n’a renvoyé aucun modèle approuvé compatible.',
       'Template parameter': 'Paramètre du modèle',
       'Scheduled time zone': 'Fuseau horaire',
       'Schedule message': 'Programmer le message',
-      'Select at least one contact with recorded permission.': 'Sélectionnez au moins un contact ayant donné son accord.',
-      'Choose an approved WhatsApp template.': 'Choisissez un modèle WhatsApp approuvé.',
-      'Choose a future date and time.': 'Choisissez une date et une heure futures.',
-      'Choose a valid Toronto local time.': 'Choisissez une heure locale valide à Toronto.',
-      'Enter a value for each template parameter.': 'Saisissez une valeur pour chaque paramètre du modèle.',
+      'Select at least one contact with recorded permission.':
+          'Sélectionnez au moins un contact ayant donné son accord.',
+      'Choose an approved WhatsApp template.':
+          'Choisissez un modèle WhatsApp approuvé.',
+      'Choose a future date and time.':
+          'Choisissez une date et une heure futures.',
+      'Choose a valid Toronto local time.':
+          'Choisissez une heure locale valide à Toronto.',
+      'Enter a value for each template parameter.':
+          'Saisissez une valeur pour chaque paramètre du modèle.',
       'Scheduled message saved.': 'Message programmé.',
-      'Could not schedule this message.': 'Impossible de programmer ce message.',
-      'Could not load scheduled messages.': 'Impossible de charger les messages programmés.',
+      'Could not schedule this message.':
+          'Impossible de programmer ce message.',
+      'Could not load scheduled messages.':
+          'Impossible de charger les messages programmés.',
       'No scheduled messages yet.': 'Aucun message programmé pour le moment.',
       'Pending': 'En attente',
       'Sending': 'Envoi en cours',
       'Submitted to WhatsApp': 'Envoyé à WhatsApp',
       'Failed': 'Échec',
-      'Outcome unknown · check WhatsApp before retrying': 'Résultat inconnu · vérifiez WhatsApp avant de réessayer',
+      'Outcome unknown · check WhatsApp before retrying':
+          'Résultat inconnu · vérifiez WhatsApp avant de réessayer',
       'Partially completed': 'Partiellement terminé',
       'Refresh inbox': 'Actualiser la boîte de réception',
       'Voice messages, translated.': 'Messages vocaux traduits.',
@@ -163,11 +183,21 @@ class AppStrings {
       'Upload a voice note or speak into your microphone. Read the original words alongside their translation.':
           'ارفع رسالة صوتية أو تحدث عبر الميكروفون. اعرض الكلمات الأصلية مع ترجمتها.',
       'Translate into': 'الترجمة إلى',
+      'Original language': 'اللغة الأصلية',
+      'Do not translate': 'بدون ترجمة',
+      'Translation': 'الترجمة',
+      'Translating transcript…': 'جارٍ ترجمة النص المنسوخ…',
+      'Translation took too long. Try again.':
+          'استغرقت الترجمة وقتًا طويلًا. حاول مرة أخرى.',
+      'Could not translate this transcript. Check the connection and try again.':
+          'تعذرت ترجمة النص. تحقق من الاتصال وحاول مرة أخرى.',
+      'Transcribing your file…': 'جارٍ نسخ الملف صوتيًا…',
+      'Connecting to live captions…': 'جارٍ الاتصال بالنسخ المباشر…',
       'French / Français': 'الفرنسية',
       'English': 'الإنجليزية',
       'French': 'الفرنسية',
-      'English and French input · language detected automatically':
-          'الإدخال بالإنجليزية أو الفرنسية · يتم اكتشاف اللغة تلقائيًا',
+      'Choose English or French to guide transcription.':
+          'اختر الإنجليزية أو الفرنسية لتوجيه النسخ الصوتي.',
       'Upload a voice note': 'رفع رسالة صوتية',
       'WhatsApp .ogg / .opus, MP3, WAV, M4A or WebM. Up to {size} MB.':
           'واتساب .ogg / .opus أو MP3 أو WAV أو M4A أو WebM. حتى {size} ميغابايت.',
@@ -181,8 +211,8 @@ class AppStrings {
           'اسمح باستخدام الميكروفون، ثم تحدث بالإنجليزية أو الفرنسية. سيظهر النص أثناء التحدث.',
       'Stop & finish': 'إيقاف وإنهاء',
       'Start speaking': 'ابدأ التحدث',
-      'Live translated text · up to 10 minutes per session\nSmall delays are normal. Keep this page open.':
-          'ترجمة مباشرة · حتى ١٠ دقائق للجلسة\nالتأخير البسيط طبيعي. أبقِ الصفحة مفتوحة.',
+      'Live captions and optional translation · up to 10 minutes per session\nSmall delays are normal. Keep this page open.':
+          'نسخ مباشر وترجمة اختيارية · حتى ١٠ دقائق للجلسة\nالتأخير البسيط طبيعي. أبقِ الصفحة مفتوحة.',
       'Original transcript': 'النص الأصلي',
       '{language} translation': 'الترجمة إلى {language}',
       'Your original words will appear here.': 'ستظهر كلماتك الأصلية هنا.',
@@ -218,17 +248,22 @@ class AppStrings {
       'Close': 'إغلاق',
       'Refresh scheduled messages': 'تحديث الرسائل المجدولة',
       'Contacts with recorded permission': 'جهات الاتصال التي وافقت',
-      'No contacts with recorded permission are available.': 'لا توجد جهات اتصال مسجلة الموافقة.',
+      'No contacts with recorded permission are available.':
+          'لا توجد جهات اتصال مسجلة الموافقة.',
       'Approved template': 'قالب معتمد',
-      'No supported approved templates were returned by Meta.': 'لم تُرجع Meta قوالب معتمدة متوافقة.',
+      'No supported approved templates were returned by Meta.':
+          'لم تُرجع Meta قوالب معتمدة متوافقة.',
       'Template parameter': 'معامل القالب',
       'Scheduled time zone': 'المنطقة الزمنية',
       'Schedule message': 'جدولة الرسالة',
-      'Select at least one contact with recorded permission.': 'اختر جهة اتصال واحدة على الأقل مسجلة الموافقة.',
+      'Select at least one contact with recorded permission.':
+          'اختر جهة اتصال واحدة على الأقل مسجلة الموافقة.',
       'Choose an approved WhatsApp template.': 'اختر قالب واتساب معتمدًا.',
       'Choose a future date and time.': 'اختر تاريخًا ووقتًا في المستقبل.',
-      'Choose a valid Toronto local time.': 'اختر وقتًا محليًا صالحًا في تورونتو.',
-      'Enter a value for each template parameter.': 'أدخل قيمة لكل معامل في القالب.',
+      'Choose a valid Toronto local time.':
+          'اختر وقتًا محليًا صالحًا في تورونتو.',
+      'Enter a value for each template parameter.':
+          'أدخل قيمة لكل معامل في القالب.',
       'Scheduled message saved.': 'تم حفظ الرسالة المجدولة.',
       'Could not schedule this message.': 'تعذرت جدولة هذه الرسالة.',
       'Could not load scheduled messages.': 'تعذر تحميل الرسائل المجدولة.',
@@ -237,7 +272,8 @@ class AppStrings {
       'Sending': 'جارٍ الإرسال',
       'Submitted to WhatsApp': 'تم الإرسال إلى واتساب',
       'Failed': 'فشل',
-      'Outcome unknown · check WhatsApp before retrying': 'النتيجة غير معروفة · تحقق من واتساب قبل إعادة المحاولة',
+      'Outcome unknown · check WhatsApp before retrying':
+          'النتيجة غير معروفة · تحقق من واتساب قبل إعادة المحاولة',
       'Partially completed': 'اكتمل جزئيًا',
       'Refresh inbox': 'تحديث الرسائل',
       'Voice messages, translated.': 'رسائل صوتية مترجمة.',

@@ -9,7 +9,14 @@ import 'package:record/record.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'app_strings.dart';
 
-enum VoiceState { idle, uploading, connecting, listening, finishing }
+enum VoiceState {
+  idle,
+  uploading,
+  connecting,
+  listening,
+  finishing,
+  translating,
+}
 
 class VoiceController extends ChangeNotifier {
   static const defaultBackendUrl = 'https://ehospitalbackend.com/voice';
@@ -47,7 +54,8 @@ class VoiceController extends ChangeNotifier {
   final List<int> _assistantPcm = [];
 
   VoiceState state = VoiceState.idle;
-  String targetLanguage = 'fr';
+  String sourceLanguage = 'fr';
+  String targetLanguage = '';
   String transcript = '';
   String translation = '';
   // The provider may omit a no-op English -> English result. While waiting
@@ -61,7 +69,18 @@ class VoiceController extends ChangeNotifier {
 
   bool get busy => state != VoiceState.idle;
   bool get hasFile => _fileBytes != null;
-  String get targetName => targetLanguage == 'fr' ? 'French' : 'English';
+  static const targetLanguageNames = <String, String>{
+    'en': 'English',
+    'fr': 'French',
+    'es': 'Spanish',
+    'zh': 'Chinese',
+    'ar': 'Arabic',
+    'pt': 'Portuguese',
+    'de': 'German',
+    'ja': 'Japanese',
+    'ko': 'Korean',
+  };
+  String get targetName => targetLanguageNames[targetLanguage] ?? 'Translation';
   String t(String text) => AppStrings.translate(localeCode, text);
 
   void setLocale(String value) {
@@ -99,10 +118,47 @@ class VoiceController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  void setTarget(String value) {
+  Future<void> setTarget(String value) async {
     if (busy) return;
     targetLanguage = value;
-    // Results belong to the previous language choice.
+    // The source transcript is independent of whether or how it is translated.
+    translation = '';
+    _translationFallback = false;
+    error = null;
+    final text = transcript.trim();
+    if (value.isEmpty || text.isEmpty || !connected) {
+      _notify();
+      return;
+    }
+    state = VoiceState.translating;
+    _notify();
+    try {
+      final response = await _http
+          .post(
+            _url('/api/translate'),
+            headers: {..._headers, 'Content-Type': 'application/json'},
+            body: jsonEncode({'text': text, 'target_language': value}),
+          )
+          .timeout(const Duration(minutes: 2));
+      final body = _responseBody(response);
+      translation = body['translation'] as String? ?? '';
+    } on FormatException catch (e) {
+      error = e.message;
+    } on TimeoutException {
+      error = t('Translation took too long. Try again.');
+    } catch (_) {
+      error = t(
+        'Could not translate this transcript. Check the connection and try again.',
+      );
+    } finally {
+      state = VoiceState.idle;
+      _notify();
+    }
+  }
+
+  void setSourceLanguage(String value) {
+    if (busy || !{'en', 'fr'}.contains(value)) return;
+    sourceLanguage = value;
     transcript = '';
     translation = '';
     _translationFallback = false;
@@ -542,6 +598,7 @@ class VoiceController extends ChangeNotifier {
     try {
       final request = http.MultipartRequest('POST', _url('/api/transcribe'))
         ..headers.addAll(_headers)
+        ..fields['source_language'] = sourceLanguage
         ..fields['target_language'] = targetLanguage
         ..files.add(
           http.MultipartFile.fromBytes('file', _fileBytes!, filename: filename),
@@ -595,6 +652,7 @@ class VoiceController extends ChangeNotifier {
       final uri = _url('/api/live').replace(
         scheme: Uri.parse(baseUrl).scheme == 'https' ? 'wss' : 'ws',
         queryParameters: {
+          'source_language': sourceLanguage,
           'target_language': targetLanguage,
           ...await _clientMetadata(),
         },

@@ -1,0 +1,214 @@
+{
+  "info": {
+    "name": "Voice Notes — Third-party Read API",
+    "description": "Read-only API checks for saved voice-feedback records. Configure a dedicated THIRD_PARTY_API_TOKEN on the backend; no database credentials or real tokens are stored in this collection.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{"key": "token", "value": "{{third_party_api_token}}", "type": "string"}]
+  },
+  "variable": [
+    {"key": "base_url", "value": "http://127.0.0.1:8003"},
+    {"key": "third_party_api_token", "value": ""},
+    {"key": "app_access_token", "value": ""},
+    {"key": "record_id", "value": ""},
+    {"key": "audio_record_id", "value": ""},
+    {"key": "since", "value": ""},
+    {"key": "until", "value": ""}
+  ],
+  "item": [
+    {
+      "name": "1. List records and capture IDs",
+      "event": [{
+        "listen": "test",
+        "script": {"type": "text/javascript", "exec": [
+          "pm.test('returns 200 JSON', () => { pm.response.to.have.status(200); pm.response.to.be.json; });",
+          "const body = pm.response.json();",
+          "pm.test('contains records and pagination', () => { pm.expect(body.records).to.be.an('array'); pm.expect(body.pagination.total).to.be.a('number'); });",
+          "if (body.records.length) { pm.collectionVariables.set('record_id', String(body.records[0].id)); const withAudio = body.records.find((row) => row.has_audio); if (withAudio) pm.collectionVariables.set('audio_record_id', String(withAudio.id)); }"
+        ]}
+      }],
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/external/v1/voice-feedback?limit=50&offset=0"
+      }
+    },
+    {
+      "name": "2. Pagination: limit one",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('returns 200 and at most one row', () => { pm.response.to.have.status(200); pm.expect(pm.response.json().records.length).to.be.at.most(1); });",
+        "pm.test('reports requested pagination', () => { const p = pm.response.json().pagination; pm.expect(p.limit).to.eql(1); pm.expect(p.offset).to.eql(0); });"
+      ]}}],
+      "request": {"method": "GET", "url": "{{base_url}}/api/external/v1/voice-feedback?limit=1&offset=0"}
+    },
+    {
+      "name": "3. Filter by source: upload",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('returns only upload records', () => { pm.response.to.have.status(200); pm.response.json().records.forEach((row) => pm.expect(row.source).to.eql('upload')); });"
+      ]}}],
+      "request": {"method": "GET", "url": "{{base_url}}/api/external/v1/voice-feedback?source=upload&limit=50&offset=0"}
+    },
+    {
+      "name": "4. Filter by status: completed",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('returns only completed records', () => { pm.response.to.have.status(200); pm.response.json().records.forEach((row) => pm.expect(row.transcription_status).to.eql('completed')); });"
+      ]}}],
+      "request": {"method": "GET", "url": "{{base_url}}/api/external/v1/voice-feedback?status=completed&limit=50&offset=0"}
+    },
+    {
+      "name": "5. Filter by source and status",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('matches both filters', () => { pm.response.to.have.status(200); pm.response.json().records.forEach((row) => { pm.expect(row.source).to.eql('whatsapp'); pm.expect(row.transcription_status).to.eql('completed'); }); });"
+      ]}}],
+      "request": {"method": "GET", "url": "{{base_url}}/api/external/v1/voice-feedback?source=whatsapp&status=completed&limit=50&offset=0"}
+    },
+    {
+      "name": "6. Filter by UTC time range (last seven days)",
+      "event": [
+        {"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
+          "const until = new Date(); const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);",
+          "pm.collectionVariables.set('since', since.toISOString()); pm.collectionVariables.set('until', until.toISOString());"
+        ]}},
+        {"listen": "test", "script": {"type": "text/javascript", "exec": [
+          "pm.test('returns records within the requested time range', () => { pm.response.to.have.status(200); const start = Date.parse(pm.collectionVariables.get('since')); const end = Date.parse(pm.collectionVariables.get('until')); pm.response.json().records.forEach((row) => { const created = Date.parse(row.created_time); pm.expect(created).to.be.at.least(start); pm.expect(created).to.be.at.most(end); }); });"
+        ]}}
+      ],
+      "request": {"method": "GET", "url": "{{base_url}}/api/external/v1/voice-feedback?since={{since}}&until={{until}}&limit=50&offset=0"}
+    },
+    {
+      "name": "7. Read record captured by request 1",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('returns the requested record', () => { pm.response.to.have.status(200); pm.expect(String(pm.response.json().record.id)).to.eql(pm.collectionVariables.get('record_id')); });"
+      ]}}],
+      "request": {"method": "GET", "url": "{{base_url}}/api/external/v1/voice-feedback/{{record_id}}"}
+    },
+    {
+      "name": "8. Download audio captured by request 1",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('returns saved audio', () => { pm.response.to.have.status(200); pm.expect(pm.response.headers.get('Content-Type')).to.match(/^(audio\\/|application\\/octet-stream)/); });"
+      ]}}],
+      "request": {"method": "GET", "url": "{{base_url}}/api/external/v1/voice-feedback/{{audio_record_id}}/audio"}
+    },
+    {
+      "name": "9. Unknown record ID",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('unknown record returns 404', () => pm.response.to.have.status(404));"
+      ]}}],
+      "request": {"method": "GET", "url": "{{base_url}}/api/external/v1/voice-feedback/987654321012345"}
+    },
+    {
+      "name": "10. Unknown audio record ID",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('unknown audio returns 404', () => pm.response.to.have.status(404));"
+      ]}}],
+      "request": {"method": "GET", "url": "{{base_url}}/api/external/v1/voice-feedback/987654321012345/audio"}
+    },
+    {
+      "name": "11. Reject missing token",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('missing token returns 401 when backend token is configured', () => pm.response.to.have.status(401));"
+      ]}}],
+      "request": {
+        "auth": {"type": "noauth"},
+        "method": "GET",
+        "url": "{{base_url}}/api/external/v1/voice-feedback?limit=1"
+      }
+    },
+    {
+      "name": "12. Reject incorrect token",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('incorrect token returns 401', () => pm.response.to.have.status(401));"
+      ]}}],
+      "request": {
+        "auth": {"type": "noauth"},
+        "header": [{"key": "Authorization", "value": "Bearer definitely-not-the-token", "type": "text"}],
+        "method": "GET",
+        "url": "{{base_url}}/api/external/v1/voice-feedback?limit=1"
+      }
+    },
+    {
+      "name": "13. APP_ACCESS_TOKEN cannot authenticate to third-party API",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('app token is rejected on third-party API', () => pm.response.to.have.status(401));"
+      ]}}],
+      "request": {
+        "auth": {"type": "noauth"},
+        "header": [{"key": "Authorization", "value": "Bearer {{app_access_token}}", "type": "text"}],
+        "method": "GET",
+        "url": "{{base_url}}/api/external/v1/voice-feedback?limit=1"
+      }
+    },
+    {
+      "name": "14. THIRD_PARTY_API_TOKEN cannot authenticate to app API",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('third-party token is rejected on app API', () => pm.response.to.have.status(401));"
+      ]}}],
+      "request": {
+        "auth": {"type": "noauth"},
+        "header": [{"key": "Authorization", "value": "Bearer {{third_party_api_token}}", "type": "text"}],
+        "method": "GET",
+        "url": "{{base_url}}/api/config"
+      }
+    },
+    {
+      "name": "15. Invalid source value",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('invalid source returns 400', () => pm.response.to.have.status(400));"
+      ]}}],
+      "request": {"method": "GET", "url": "{{base_url}}/api/external/v1/voice-feedback?source=invalid"}
+    },
+    {
+      "name": "16. Invalid limit value",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('out-of-range limit returns 400', () => pm.response.to.have.status(400));"
+      ]}}],
+      "request": {"method": "GET", "url": "{{base_url}}/api/external/v1/voice-feedback?limit=0"}
+    },
+    {
+      "name": "17. Timestamp without timezone",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('timezone-less timestamp returns 422', () => pm.response.to.have.status(422));"
+      ]}}],
+      "request": {"method": "GET", "url": "{{base_url}}/api/external/v1/voice-feedback?since=2026-01-01T00:00:00"}
+    },
+    {
+      "name": "18. since later than until",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('reversed time range returns 422', () => pm.response.to.have.status(422));"
+      ]}}],
+      "request": {"method": "GET", "url": "{{base_url}}/api/external/v1/voice-feedback?since=2026-02-01T00:00:00Z&until=2026-01-01T00:00:00Z"}
+    },
+    {
+      "name": "19. Read-only endpoint rejects POST",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('POST to read endpoint returns 405', () => pm.response.to.have.status(405));"
+      ]}}],
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/api/external/v1/voice-feedback"
+      }
+    },
+    {
+      "name": "20. No arbitrary SQL endpoint",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('arbitrary SQL route does not exist', () => pm.response.to.have.status(404));"
+      ]}}],
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/external/v1/query?sql=SELECT%20*%20FROM%20voice_feedback"
+      }
+    },
+    {
+      "name": "21. Optional: backend token is not configured (isolated staging only)",
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('missing backend token configuration returns 503', () => pm.response.to.have.status(503));"
+      ]}}],
+      "request": {
+        "auth": {"type": "noauth"},
+        "method": "GET",
+        "url": "{{base_url}}/api/external/v1/voice-feedback?limit=1"
+      }
+    }
+  ]
+}
