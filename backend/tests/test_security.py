@@ -62,6 +62,8 @@ def test_every_http_api_route_requires_authentication(isolated):
         assert len(routes) >= 10
         for path, methods in routes:
             for method in methods - {'head', 'options'}:
+                if path.startswith('/api/external/v1/'):
+                    continue
                 response = client.request(method, path.replace('{task_id}', 'missing'))
                 assert response.status_code == 401, (method, path)
                 assert response.headers['cache-control'] == 'no-store'

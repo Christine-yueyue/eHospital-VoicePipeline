@@ -201,7 +201,7 @@ def set_save_to_database(enabled: bool) -> bool:
     return enabled
 
 
-def save_live_feedback(transcript: str, translation: str, target_language: str,
+def save_live_feedback(transcript: str, translation: str, target_language: str | None,
                        client_platform: str | None = None,
                        client_os_version: str | None = None,
                        client_app_version: str | None = None,

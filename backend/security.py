@@ -1,6 +1,8 @@
 """Bound authenticated API input before FastAPI parses multipart or JSON bodies."""
 
 import asyncio
+import hmac
+import os
 from tempfile import SpooledTemporaryFile
 from threading import Lock
 
@@ -8,6 +10,17 @@ from starlette.datastructures import Headers, MutableHeaders
 from starlette.responses import JSONResponse
 
 from auth import app_token, authorized
+
+
+def third_party_token() -> str:
+    return os.getenv('THIRD_PARTY_API_TOKEN', '').strip()
+
+
+def third_party_authorized(header: str) -> bool:
+    expected = third_party_token()
+    return bool(expected) and hmac.compare_digest(
+        header.encode(), f"Bearer {expected}".encode()
+    )
 
 JSON_BODY_BYTES = 64 * 1024
 MULTIPART_OVERHEAD_BYTES = 64 * 1024
@@ -48,11 +61,18 @@ class APIProtectionMiddleware:
                                headers=headers)(scope, receive, private_send)
 
         headers = Headers(scope=scope)
-        if not app_token():
-            await reject(503, 'Set APP_ACCESS_TOKEN in the backend .env file.')
+        is_external_read_api = path.startswith('/api/external/v1/')
+        configured_token = third_party_token() if is_external_read_api else app_token()
+        if not configured_token:
+            setting = 'THIRD_PARTY_API_TOKEN' if is_external_read_api else 'APP_ACCESS_TOKEN'
+            await reject(503, f'Set {setting} in the backend .env file.')
             return
-        if len(headers.getlist('authorization')) != 1 or not authorized(headers.get('authorization', '')):
-            await reject(401, 'Enter the correct app access token in Connection settings.',
+        auth_ok = (third_party_authorized(headers.get('authorization', ''))
+                   if is_external_read_api else authorized(headers.get('authorization', '')))
+        if len(headers.getlist('authorization')) != 1 or not auth_ok:
+            error = ('Invalid third-party API token.' if is_external_read_api
+                     else 'Enter the correct app access token in Connection settings.')
+            await reject(401, error,
                          {'WWW-Authenticate': 'Bearer'})
             return
 

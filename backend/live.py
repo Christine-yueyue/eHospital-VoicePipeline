@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
-from services import api_key, check_target
+from services import api_key, check_source_language, check_target
 from auth import authenticate_socket
 import voice_feedback
 
@@ -62,7 +62,7 @@ async def _wait_for_session_update(upstream) -> None:
 
 
 async def relay(websocket: WebSocket, translation_upstream, transcription_upstream,
-                target_language: str = 'fr', client_platform: str | None = None,
+                target_language: str | None = None, client_platform: str | None = None,
                 client_os_version: str | None = None,
                 client_app_version: str | None = None,
                 client_device_model: str | None = None,
@@ -97,7 +97,8 @@ async def relay(websocket: WebSocket, translation_upstream, transcription_upstre
                 total += len(chunk)
                 if total > MAX_SESSION_SECONDS * 48_000:
                     raise HTTPException(400, "The 10-minute demo limit was reached. Start a new session.")
-                await translation_upstream.send(audio_event(chunk))
+                if translation_upstream is not None:
+                    await translation_upstream.send(audio_event(chunk))
                 await transcription_upstream.send(transcription_audio_event(chunk))
             elif message.get("text"):
                 if len(message['text'].encode('utf-8')) > 256:
@@ -109,7 +110,8 @@ async def relay(websocket: WebSocket, translation_upstream, transcription_upstre
                 if control != {"type": "stop"}:
                     raise HTTPException(400, "Unsupported live audio message.")
                 stop_requested.set()
-                await translation_upstream.send(json.dumps({"type": "session.close"}))
+                if translation_upstream is not None:
+                    await translation_upstream.send(json.dumps({"type": "session.close"}))
                 await transcription_upstream.send(json.dumps({"type": "input_audio_buffer.commit"}))
                 return
             else:
@@ -163,23 +165,28 @@ async def relay(websocket: WebSocket, translation_upstream, transcription_upstre
         raise HTTPException(502, "The source transcription disconnected before finishing. Please start again.")
 
     send_task = asyncio.create_task(from_microphone())
-    translation_task = asyncio.create_task(from_provider())
+    translation_task = asyncio.create_task(from_provider()) if translation_upstream is not None else None
     transcription_task = asyncio.create_task(from_transcriber())
+    tasks = {send_task, transcription_task}
+    if translation_task is not None:
+        tasks.add(translation_task)
     try:
-        done, _ = await asyncio.wait(
-            {send_task, translation_task, transcription_task},
-            return_when=asyncio.FIRST_COMPLETED,
-        )
+        done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         if send_task in done:
             await send_task
+            completion_tasks = [transcription_task]
+            if translation_task is not None:
+                completion_tasks.append(translation_task)
             await asyncio.wait_for(
-                asyncio.gather(translation_task, transcription_task),
+                asyncio.gather(*completion_tasks),
                 timeout=30,
             )
             if final_transcript.strip():
                 voice_feedback.save_live_feedback(
                     final_transcript.strip(),
-                    (translated_text or final_transcript).strip(),
+                    translated_text.strip() or (
+                        final_transcript.strip() if target_language == 'en' else ''
+                    ),
                     target_language,
                     client_platform, client_os_version, client_app_version,
                     client_device_model, client_is_simulator,
@@ -192,9 +199,9 @@ async def relay(websocket: WebSocket, translation_upstream, transcription_upstre
                 await task
             await send_task
     finally:
-        for task in (send_task, translation_task, transcription_task):
+        for task in tasks:
             task.cancel()
-        await asyncio.gather(send_task, translation_task, transcription_task, return_exceptions=True)
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 @live_router.websocket("/api/live")
@@ -209,8 +216,12 @@ async def live(websocket: WebSocket):
     if not await authenticate_socket(websocket):
         return
     try:
-        target = websocket.query_params.get("target_language", "fr")
-        check_target(target)
+        source_language = websocket.query_params.get("source_language", "") or None
+        if source_language:
+            check_source_language(source_language)
+        target = websocket.query_params.get("target_language", "") or None
+        if target:
+            check_target(target)
         client_platform = client_metadata(websocket.query_params.get("client_platform"))
         client_os_version = client_metadata(websocket.query_params.get("client_os_version"))
         client_app_version = client_metadata(websocket.query_params.get("client_app_version"))
@@ -220,51 +231,32 @@ async def live(websocket: WebSocket):
             raise HTTPException(400, "Invalid simulator metadata.")
         client_is_simulator = simulator_value == "true" if simulator_value else None
         key = api_key()
-        query = urlencode({"model": os.getenv("REALTIME_TRANSLATION_MODEL", "gpt-realtime-translate")})
-        async with asyncio.timeout(MAX_SESSION_SECONDS):
-            async with connect(
+        translation_context = None
+        if target:
+            query = urlencode({"model": os.getenv("REALTIME_TRANSLATION_MODEL", "gpt-realtime-translate")})
+            translation_context = connect(
                 f"wss://api.openai.com/v1/realtime/translations?{query}",
                 additional_headers={"Authorization": f"Bearer {key}"},
-                # Python.org macOS installs may lack usable system CA paths.
-                # Use the maintained CA bundle, as the upload HTTP client does.
                 ssl=ssl.create_default_context(cafile=certifi.where()),
                 open_timeout=15, close_timeout=5, max_size=2**22,
-            ) as upstream:
-                await upstream.send(json.dumps({
-                    "type": "session.update", "session": {"audio": {"output": {"language": target}}},
-                }))
-                await _wait_for_session_update(upstream)
-                transcription_query = urlencode({
-                    "model": os.getenv("REALTIME_TRANSCRIPTION_SESSION_MODEL", "gpt-realtime"),
-                })
-                async with connect(
-                    f"wss://api.openai.com/v1/realtime?{transcription_query}",
-                    additional_headers={"Authorization": f"Bearer {key}"},
-                    ssl=ssl.create_default_context(cafile=certifi.where()),
-                    open_timeout=15, close_timeout=5, max_size=2**22,
-                ) as transcription_upstream:
-                    await transcription_upstream.send(json.dumps({
-                        "type": "session.update",
-                        "session": {
-                            "type": "realtime",
-                            "audio": {
-                                "input": {
-                                    "format": {"type": "audio/pcm", "rate": 24000},
-                                    "transcription": {
-                                        "model": os.getenv("REALTIME_TRANSCRIPTION_MODEL", "gpt-live-transcribe"),
-                                        "languages": ["en", "fr"],
-                                        "delay": "low",
-                                    },
-                                    "turn_detection": None,
-                                },
-                            },
-                        },
+            )
+        async with asyncio.timeout(MAX_SESSION_SECONDS):
+            if translation_context is None:
+                await _run_transcription_session(
+                    websocket, key, target, source_language, client_platform, client_os_version,
+                    client_app_version, client_device_model, client_is_simulator,
+                )
+            else:
+                async with translation_context as upstream:
+                    await upstream.send(json.dumps({
+                        "type": "session.update", "session": {"audio": {"output": {"language": target}}},
                     }))
-                    await _wait_for_session_update(transcription_upstream)
-                    await websocket.send_json({"type": "ready", "sample_rate": 24000})
-                    await relay(websocket, upstream, transcription_upstream, target,
-                                client_platform, client_os_version, client_app_version,
-                                client_device_model, client_is_simulator)
+                    await _wait_for_session_update(upstream)
+                    await _run_transcription_with_translation(
+                        websocket, upstream, key, target, source_language, client_platform,
+                        client_os_version, client_app_version, client_device_model,
+                        client_is_simulator,
+                    )
     except WebSocketDisconnect:
         pass
     except HTTPException as exc:
@@ -288,3 +280,64 @@ async def live(websocket: WebSocket):
     finally:
         with suppress(Exception):
             await websocket.close()
+
+
+async def _run_transcription_with_translation(websocket, upstream, key, target,
+                                              source_language,
+                                              client_platform, client_os_version,
+                                              client_app_version, client_device_model,
+                                              client_is_simulator):
+    transcription_query = urlencode({
+        "model": os.getenv("REALTIME_TRANSCRIPTION_SESSION_MODEL", "gpt-realtime"),
+    })
+    async with connect(
+        f"wss://api.openai.com/v1/realtime?{transcription_query}",
+        additional_headers={"Authorization": f"Bearer {key}"},
+        ssl=ssl.create_default_context(cafile=certifi.where()),
+        open_timeout=15, close_timeout=5, max_size=2**22,
+    ) as transcription_upstream:
+        await _configure_transcription(transcription_upstream, source_language)
+        await websocket.send_json({"type": "ready", "sample_rate": 24000})
+        await relay(websocket, upstream, transcription_upstream, target,
+                    client_platform, client_os_version, client_app_version,
+                    client_device_model, client_is_simulator)
+
+
+async def _run_transcription_session(websocket, key, target, source_language, client_platform,
+                                     client_os_version, client_app_version,
+                                     client_device_model, client_is_simulator):
+    transcription_query = urlencode({
+        "model": os.getenv("REALTIME_TRANSCRIPTION_SESSION_MODEL", "gpt-realtime"),
+    })
+    async with connect(
+        f"wss://api.openai.com/v1/realtime?{transcription_query}",
+        additional_headers={"Authorization": f"Bearer {key}"},
+        ssl=ssl.create_default_context(cafile=certifi.where()),
+        open_timeout=15, close_timeout=5, max_size=2**22,
+    ) as transcription_upstream:
+        await _configure_transcription(transcription_upstream, source_language)
+        await websocket.send_json({"type": "ready", "sample_rate": 24000})
+        await relay(websocket, None, transcription_upstream, target,
+                    client_platform, client_os_version, client_app_version,
+                    client_device_model, client_is_simulator)
+
+
+async def _configure_transcription(transcription_upstream, source_language):
+    await transcription_upstream.send(json.dumps({
+        "type": "session.update",
+        "session": {
+            "type": "realtime",
+            "audio": {
+                "input": {
+                    "format": {"type": "audio/pcm", "rate": 24000},
+                    "transcription": {
+                        "model": os.getenv("REALTIME_TRANSCRIPTION_MODEL", "gpt-live-transcribe"),
+                        "languages": [source_language] if source_language else ["en", "fr"],
+                        "delay": "low",
+                    },
+                    "turn_detection": None,
+                },
+            },
+        },
+    }))
+    await _wait_for_session_update(transcription_upstream)

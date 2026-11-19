@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -18,13 +18,16 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
-from services import LANGUAGES, check_target, transcribe_audio, translate_text
+from services import (
+    LANGUAGES, check_source_language, check_target, transcribe_audio, translate_text,
+)
 from live import live_router
 from security import APIProtectionMiddleware
 import whatsapp
 import voice_feedback
 import followup
 import scheduled_messages
+import external_api
 
 ALLOWED_EXTENSIONS = {".ogg", ".opus", ".mp3", ".wav", ".m4a", ".webm"}
 CLIENT_METADATA_MAX_LENGTH = 100
@@ -90,6 +93,7 @@ app.include_router(live_router)
 app.include_router(whatsapp.router)
 app.include_router(followup.router)
 app.include_router(scheduled_messages.router)
+app.include_router(external_api.router)
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -126,6 +130,19 @@ async def update_save_setting(setting: SaveSetting):
     return {'save_to_database': voice_feedback.set_save_to_database(setting.enabled)}
 
 
+class TranslateTextRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=12_000)
+    target_language: str
+
+
+@app.post('/api/translate')
+async def translate_transcript(request: TranslateTextRequest):
+    target = request.target_language.strip()
+    check_target(target)
+    translation = await translate_text(request.text, target)
+    return {'success': True, 'target_language': target, 'translation': translation}
+
+
 @app.get('/health')
 async def health():
     return {'status': 'ok', 'version': '3.3.0'}
@@ -141,7 +158,8 @@ def client_metadata(value: str | None) -> str | None:
 
 
 @app.post("/api/transcribe")
-async def transcribe(file: UploadFile | None = File(default=None), target_language: str = Form(""),
+async def transcribe(file: UploadFile | None = File(default=None), source_language: str = Form(""),
+                     target_language: str = Form(""),
                      client_platform: str = Form(""), client_os_version: str = Form(""),
                      client_app_version: str = Form(""), client_device_model: str = Form(""),
                      client_is_simulator: str = Form("")):
@@ -154,6 +172,8 @@ async def transcribe(file: UploadFile | None = File(default=None), target_langua
         if client_is_simulator not in {"", "true", "false"}:
             raise HTTPException(400, "Invalid simulator metadata.")
         is_simulator = client_is_simulator == "true" if client_is_simulator else None
+        if source_language:
+            check_source_language(source_language)
         if target_language:
             check_target(target_language)
         if file is None or not file.filename:
@@ -186,8 +206,16 @@ async def transcribe(file: UploadFile | None = File(default=None), target_langua
                 client_app_version=client_app_version, client_device_model=client_device_model,
                 client_is_simulator=is_simulator) if save_enabled else None
             try:
-                transcript = await transcribe_audio(
-                    str(voice_feedback.audio_directory() / record['file_name']) if record else str(path))
+                transcription_path = (
+                    str(voice_feedback.audio_directory() / record['file_name'])
+                    if record else str(path)
+                )
+                if source_language:
+                    transcript = await transcribe_audio(
+                        transcription_path, language=source_language
+                    )
+                else:
+                    transcript = await transcribe_audio(transcription_path)
             except HTTPException as exc:
                 if record:
                     voice_feedback.mark_failed(record['audio_path'],

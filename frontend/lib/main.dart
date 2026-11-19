@@ -107,10 +107,17 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
       final c = controller;
       final status = switch (c.state) {
         VoiceState.idle => c.t('Ready when you are'),
-        VoiceState.uploading => c.t('Transcribing and translating your file…'),
-        VoiceState.connecting => c.t('Connecting to live translation…'),
+        VoiceState.uploading =>
+          c.targetLanguage.isEmpty
+              ? c.t('Transcribing your file…')
+              : c.t('Transcribing and translating your file…'),
+        VoiceState.connecting =>
+          c.targetLanguage.isEmpty
+              ? c.t('Connecting to live captions…')
+              : c.t('Connecting to live translation…'),
         VoiceState.listening => c.t('Listening · speak naturally'),
         VoiceState.finishing => c.t('Finishing the last words…'),
+        VoiceState.translating => c.t('Translating transcript…'),
       };
       return Scaffold(
         appBar: AppBar(
@@ -253,38 +260,35 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       SizedBox(
+                        key: const Key('source-language-picker'),
                         width: 250,
                         child: DropdownButtonFormField<String>(
+                          initialValue: c.sourceLanguage,
                           isExpanded: true,
-                          initialValue: c.targetLanguage,
                           decoration: InputDecoration(
-                            labelText: c.t('Translate into'),
+                            labelText: c.t('Original language'),
                           ),
                           items: [
                             DropdownMenuItem(
-                              value: 'fr',
-                              child: Text(
-                                c.t('French / Français'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            DropdownMenuItem(
                               value: 'en',
                               child: Text(c.t('English')),
+                            ),
+                            DropdownMenuItem(
+                              value: 'fr',
+                              child: Text(c.t('French / Français')),
                             ),
                           ],
                           onChanged: c.busy
                               ? null
                               : (value) {
-                                  if (value != null) c.setTarget(value);
+                                  if (value != null) {
+                                    c.setSourceLanguage(value);
+                                  }
                                 },
                         ),
                       ),
                       Text(
-                        c.t(
-                          'English and French input · language detected automatically',
-                        ),
+                        c.t('Choose English or French to guide transcription.'),
                         style: TextStyle(color: Color(0xFF58665F)),
                       ),
                     ],
@@ -369,7 +373,7 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                           const SizedBox(height: 16),
                           Text(
                             c.t(
-                              'Live translated text · up to 10 minutes per session\nSmall delays are normal. Keep this page open.',
+                              'Live captions and optional translation · up to 10 minutes per session\nSmall delays are normal. Keep this page open.',
                             ),
                             style: TextStyle(
                               color: Color(0xFF58665F),
@@ -432,11 +436,16 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
                         c.t('Your original words will appear here.'),
                       );
                       final translated = _result(
-                        c
-                            .t('{language} translation')
-                            .replaceAll('{language}', c.t(c.targetName)),
+                        c.targetLanguage.isEmpty
+                            ? c.t('Translation')
+                            : c
+                                  .t('{language} translation')
+                                  .replaceAll('{language}', c.t(c.targetName)),
                         c.translation,
-                        c.t('Your translated text will appear here.'),
+                        c.targetLanguage.isEmpty
+                            ? ''
+                            : c.t('Your translated text will appear here.'),
+                        trailing: _translationLanguagePicker(c),
                       );
                       if (constraints.maxWidth < 720) {
                         return Column(
@@ -515,7 +524,12 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
     ),
   );
 
-  Widget _result(String title, String text, String placeholder) => Card(
+  Widget _result(
+    String title,
+    String text,
+    String placeholder, {
+    Widget? trailing,
+  }) => Card(
     margin: EdgeInsets.zero,
     elevation: 0,
     color: Colors.white,
@@ -530,12 +544,15 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
               Expanded(
                 child: Text(
                   title,
+                  maxLines: trailing == null ? null : 1,
+                  overflow: trailing == null ? null : TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
+              if (trailing != null) trailing,
               IconButton(
                 tooltip: controller.t('Copy text'),
                 onPressed: text.isEmpty
@@ -567,4 +584,35 @@ class _VoiceHomeState extends State<VoiceHome> with WidgetsBindingObserver {
       ),
     ),
   );
+
+  Widget _translationLanguagePicker(VoiceController c) => SizedBox(
+    key: const Key('translation-language-picker'),
+    width: 150,
+    child: DropdownButton<String>(
+      value: c.targetLanguage,
+      isExpanded: true,
+      underline: const SizedBox.shrink(),
+      onChanged: c.busy
+          ? null
+          : (value) {
+              if (value != null) unawaited(c.setTarget(value));
+            },
+      items: _translationLanguageItems(c),
+    ),
+  );
+
+  List<DropdownMenuItem<String>> _translationLanguageItems(
+    VoiceController c,
+  ) => [
+    DropdownMenuItem(value: '', child: Text(c.t('Do not translate'))),
+    const DropdownMenuItem(value: 'fr', child: Text('French / Français')),
+    const DropdownMenuItem(value: 'en', child: Text('English')),
+    const DropdownMenuItem(value: 'es', child: Text('Spanish / Español')),
+    const DropdownMenuItem(value: 'zh', child: Text('Chinese / 中文')),
+    const DropdownMenuItem(value: 'ar', child: Text('Arabic / العربية')),
+    const DropdownMenuItem(value: 'pt', child: Text('Portuguese / Português')),
+    const DropdownMenuItem(value: 'de', child: Text('German / Deutsch')),
+    const DropdownMenuItem(value: 'ja', child: Text('Japanese / 日本語')),
+    const DropdownMenuItem(value: 'ko', child: Text('Korean / 한국어')),
+  ];
 }
